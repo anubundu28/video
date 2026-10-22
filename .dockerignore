@@ -8,3 +8,4 @@ server/dist
 *.log
 .env
 server/.env
+sql-dashboard

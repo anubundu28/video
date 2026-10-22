@@ -1,0 +1,152 @@
+{
+  "title": "SQL Server Health Dashboard",
+  "environment": "PRODUCTION",
+
+  "server": {
+    "port": 8765,
+    "openBrowser": true,
+    "browserAppMode": true,
+    "maxConcurrentRequests": 12,
+    "logToFile": true
+  },
+
+  "connection": {
+    "applicationName": "SQL Health Dashboard",
+    "connectTimeoutSeconds": 8,
+    "commandTimeoutSeconds": 60,
+    "maxRowsPerResultSet": 5000,
+    "encrypt": false,
+    "trustServerCertificate": true
+  },
+
+  "ui": {
+    "concurrency": 6,
+    "pingOnLoad": true,
+    "defaultAutoRefreshMinutes": 0
+  },
+
+  "instances": [
+    {
+      "id": "prod-pub",
+      "name": "PROD-SQL01",
+      "server": "PROD-SQL01.corp.local",
+      "group": "Production",
+      "role": "Publisher",
+      "description": "Primary OLTP",
+      "auth": "windows"
+    },
+    {
+      "id": "prod-dist",
+      "name": "PROD-SQL02\\DIST",
+      "server": "PROD-SQL02.corp.local\\DIST",
+      "group": "Production",
+      "role": "Distributor",
+      "auth": "windows"
+    },
+    {
+      "id": "rpt-sub",
+      "name": "RPT-SQL01",
+      "server": "RPT-SQL01.corp.local,1433",
+      "group": "Reporting",
+      "role": "Subscriber",
+      "auth": "sql",
+      "username": "monitor_ro",
+      "credentialKey": "reporting"
+    }
+  ],
+
+  "checks": [
+    {
+      "id": "replication",
+      "title": "Replication Status",
+      "description": "Log Reader, Distribution and Merge agents, latency, undistributed commands and recent replication errors.",
+      "category": "Replication",
+      "icon": "replication",
+      "featured": true,
+      "file": "checks/replication.sql",
+      "commandTimeoutSeconds": 120,
+      "resultTitles": ["Replication agents", "Replication errors (last 24 h)", "Replicated databases on this instance", "Subscriptions (subscriber side)"]
+    },
+    {
+      "id": "overview",
+      "title": "Instance Overview",
+      "description": "Version, uptime, CPU, memory, page life expectancy and current activity.",
+      "category": "Instance",
+      "icon": "server",
+      "file": "checks/instance-overview.sql",
+      "resultTitles": ["Instance metrics"]
+    },
+    {
+      "id": "ag",
+      "title": "Availability Groups",
+      "description": "Always On group health, synchronization state, send/redo queues and estimated lag.",
+      "category": "High availability",
+      "icon": "shield",
+      "file": "checks/availability-groups.sql",
+      "resultTitles": ["Availability groups", "Database replica states"]
+    },
+    {
+      "id": "jobs",
+      "title": "SQL Agent Jobs",
+      "description": "Agent service state, failed job steps in the last 24 h and the status of every job.",
+      "category": "Automation",
+      "icon": "clock",
+      "file": "checks/agent-jobs.sql",
+      "resultTitles": ["SQL Server Agent service", "Failed / retried steps (last 24 h)", "Job overview"]
+    },
+    {
+      "id": "backups",
+      "title": "Backup Status",
+      "description": "Last full, differential and log backup for every database against RPO thresholds.",
+      "category": "Recovery",
+      "icon": "archive",
+      "file": "checks/backups.sql",
+      "resultTitles": ["Backups by database"]
+    },
+    {
+      "id": "databases",
+      "title": "Database Health",
+      "description": "Database state, size, log usage, log reuse waits and risky settings.",
+      "category": "Databases",
+      "icon": "database",
+      "file": "checks/databases.sql",
+      "resultTitles": ["Databases"]
+    },
+    {
+      "id": "disk",
+      "title": "Disk Space",
+      "description": "Free space on every volume that holds data or log files.",
+      "category": "Storage",
+      "icon": "disk",
+      "file": "checks/disk-space.sql",
+      "resultTitles": ["Volumes"]
+    },
+    {
+      "id": "blocking",
+      "title": "Blocking & Long Queries",
+      "description": "Head blockers, blocked sessions and requests running longer than 5 minutes.",
+      "category": "Performance",
+      "icon": "lock",
+      "file": "checks/blocking.sql",
+      "resultTitles": ["Head blockers", "Blocked requests", "Long-running requests"]
+    },
+    {
+      "id": "waits",
+      "title": "Top Wait Stats",
+      "description": "Where the instance spends its time waiting since the last restart.",
+      "category": "Performance",
+      "icon": "activity",
+      "file": "checks/wait-stats.sql",
+      "resultTitles": ["Top waits"]
+    },
+    {
+      "id": "errorlog",
+      "title": "Error Log",
+      "description": "Errors and failures written to the current SQL Server error log in the last 24 h.",
+      "category": "Logs",
+      "icon": "file",
+      "file": "checks/error-log.sql",
+      "resultTitles": ["Error log entries (last 24 h)"]
+    }
+  ]
+}

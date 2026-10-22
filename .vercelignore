@@ -1,3 +1,4 @@
 # Never upload broken prebuilt artifacts (missing config.json crashes deploy).
 .vercel/output
 .vercel/output/**
+sql-dashboard

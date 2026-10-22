@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>SQL Server Health Dashboard</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="compat.js"></script>
+  <script src="demo.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div id="unsupported" class="unsupported" hidden>
+    <h1>Please open this dashboard in Microsoft Edge or Google Chrome</h1>
+    <p>This browser is too old to run the dashboard. Copy the address from the dashboard console window into Edge or Chrome.</p>
+  </div>
+
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" data-icon="logo"></span>
+      <div class="brand-text">
+        <h1 id="app-title">SQL Server Health Dashboard</h1>
+        <span class="brand-sub" id="app-sub">Connecting…</span>
+      </div>
+      <span class="env-badge" id="env-badge" hidden></span>
+    </div>
+    <div class="topbar-actions">
+      <label class="select-wrap" title="Re-run the checks on screen automatically">
+        <span data-icon="refresh"></span>
+        <select id="auto-refresh" aria-label="Auto refresh">
+          <option value="0">Auto-refresh off</option>
+          <option value="1">Every 1 min</option>
+          <option value="5">Every 5 min</option>
+          <option value="15">Every 15 min</option>
+          <option value="30">Every 30 min</option>
+        </select>
+      </label>
+      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <span data-icon="moon" class="when-light"></span><span data-icon="sun" class="when-dark"></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar" aria-label="Instances">
+      <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-expanded="true" aria-controls="sidebar-body">
+        <span data-icon="server"></span>
+        <span id="sidebar-toggle-label">Instances</span>
+        <span data-icon="chevron" class="chev"></span>
+      </button>
+      <div class="sidebar-body" id="sidebar-body">
+        <div class="sidebar-head">
+          <h2>Instances</h2>
+          <div class="sidebar-tools">
+            <button class="link-btn" id="select-all" type="button">All</button>
+            <span class="sep">·</span>
+            <button class="link-btn" id="select-none" type="button">None</button>
+          </div>
+        </div>
+        <div class="instance-search">
+          <span data-icon="search"></span>
+          <input type="search" id="instance-filter" placeholder="Filter instances" aria-label="Filter instances">
+        </div>
+        <div id="instance-list" class="instance-list" role="group" aria-label="Target instances"></div>
+        <button class="btn btn-ghost btn-block" id="ping-all" type="button">
+          <span data-icon="plug"></span> Test connections
+        </button>
+      </div>
+    </aside>
+
+    <main class="content" id="main" tabindex="-1">
+      <section class="kpis" aria-label="Summary">
+        <div class="kpi" id="kpi-online">
+          <span class="kpi-label">Instances online</span>
+          <span class="kpi-value">–</span>
+          <span class="kpi-foot">Not tested yet</span>
+        </div>
+        <div class="kpi kpi-critical" id="kpi-critical">
+          <span class="kpi-label">Critical findings</span>
+          <span class="kpi-value">0</span>
+          <span class="kpi-foot">Across checks on screen</span>
+        </div>
+        <div class="kpi kpi-warning" id="kpi-warning">
+          <span class="kpi-label">Warnings</span>
+          <span class="kpi-value">0</span>
+          <span class="kpi-foot">Across checks on screen</span>
+        </div>
+        <div class="kpi" id="kpi-last">
+          <span class="kpi-label">Last run</span>
+          <span class="kpi-value">–</span>
+          <span class="kpi-foot">No checks run yet</span>
+        </div>
+      </section>
+
+      <section class="hero" aria-label="Quick actions">
+        <div class="hero-text">
+          <h2>Run a health check</h2>
+          <p id="target-summary">Select one or more instances on the left.</p>
+        </div>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-lg" id="run-featured" type="button">
+            <span data-icon="replication"></span> <span id="run-featured-label">Check Replication Status</span>
+          </button>
+          <button class="btn btn-secondary btn-lg" id="run-all" type="button">
+            <span data-icon="play"></span> Run full health check
+          </button>
+        </div>
+      </section>
+
+      <section aria-labelledby="checks-heading">
+        <div class="section-head">
+          <h2 id="checks-heading">Health checks</h2>
+        </div>
+        <div class="check-grid" id="check-grid"></div>
+      </section>
+
+      <section aria-labelledby="results-heading" class="results-section">
+        <div class="section-head">
+          <h2 id="results-heading">Results</h2>
+          <div class="section-tools">
+            <div class="segmented" role="radiogroup" aria-label="Rows to show">
+              <button type="button" role="radio" aria-checked="true" data-view="all" class="is-active">All rows</button>
+              <button type="button" role="radio" aria-checked="false" data-view="issues">Issues only</button>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="clear-results" type="button"><span data-icon="trash"></span> Clear</button>
+          </div>
+        </div>
+        <div id="results">
+          <div class="empty-state" id="empty-results">
+            <span data-icon="pulse" class="empty-icon"></span>
+            <h3>No results yet</h3>
+            <p>Pick instances, then run a check. Results appear here, worst findings first.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="footer">
+    <span id="footer-status"><span class="dot dot-unknown"></span> Starting…</span>
+    <span class="footer-right">Read-only checks · runs locally on this machine</span>
+  </footer>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>
