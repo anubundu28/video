@@ -40,9 +40,10 @@ Keep the console window open while you use the dashboard; close it (or press `Ct
   dashboard remembers the last server you picked.
 * **Search** (press `/` or `Ctrl+K`): finds databases on the current server, menu pages and other servers. Pick a
   database to open the Databases page filtered to it. On a detail page you can also filter its tables by the text.
-* **Overview**: version, edition, host OS and uptime; CPU (with the last hour as a sparkline), memory against RAM and
-  max server memory, database count, data/log size, free disk space, per-volume disks, the largest databases, and four
-  "attention" tiles (missing backups, running backups, active/blocked queries, failed jobs) that open the matching page.
+* **Overview**: version, edition, host OS and uptime; CPU usage, logical CPUs and MAXDOP; server RAM, max server memory
+  and memory used by SQL Server; database count; total data/log size and free disk space; a disks table; the largest
+  databases; and four "attention" tiles (missing backups, running backups, active/blocked queries, failed jobs) that open
+  the matching page. Plain numbers only, no charts.
 * **Menu pages**: Databases · Missing backups (no full backup in 7 days) · Running backups (live % complete and ETA,
   plus everything finished in 24 h) · Backup RPO · Running queries (with head blockers) · Replication · Availability
   groups · Agent jobs · Wait statistics · Error log. Badges on the menu show live counts.
@@ -50,7 +51,7 @@ Keep the console window open while you use the dashboard; close it (or press `Ct
   Excel) and downloads as CSV.
 * Results are cached in the browser for `ui.cacheSeconds` (default 120 s), so switching pages is instant. **Refresh**
   re-runs the queries now; the **Manual / 1 / 5 / 15 min** selector refreshes the current page automatically.
-* Dark "control room" theme by default; the sun/moon button switches to light.
+* Clean white layout with navy blue buttons.
 
 ## Configuring instances
 
@@ -89,7 +90,7 @@ server.
 
 | Page | Check file | What it shows |
 |---|---|---|
-| Overview | `server-summary.sql` | Server identity, CPU (current + last 60 min), memory, databases, data/log size, disks, largest databases, alert counts. |
+| Overview | `server-summary.sql` | Server identity, CPU usage and MAXDOP, memory, databases, data/log size, disks, largest databases, alert counts. |
 | Databases | `databases.sql` | Every database: state, recovery model, data/log size, log used %, last full backup, log reuse wait, risky settings. |
 | Missing backups | `backup-missing.sql` | Databases with no full backup in the last 7 days, or none at all. |
 | Running backups | `running-backups.sql` | BACKUP/RESTORE in progress with % complete, elapsed, remaining and estimated finish; backups completed in the last 24 h with size, compression and destination. |

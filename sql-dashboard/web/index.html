@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark light">
+  <meta name="color-scheme" content="light">
   <title>SQL Server Health Dashboard</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -12,8 +12,6 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
-
   <div id="unsupported" class="unsupported" hidden>
     <h1>Please open this dashboard in Microsoft Edge or Google Chrome</h1>
     <p>This browser is too old to run the dashboard. Copy the address from the dashboard console window into Edge or Chrome.</p>
@@ -63,9 +61,6 @@
           <option value="15">15 min</option>
         </select>
       </label>
-      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch light / dark theme" title="Switch light / dark theme">
-        <span data-icon="sun" class="when-dark"></span><span data-icon="moon" class="when-light"></span>
-      </button>
     </div>
   </header>
 
@@ -77,6 +72,5 @@
   </div>
 
   <div class="toasts" id="toasts" aria-live="polite"></div>
-  <div class="tip" id="tip" hidden></div>
 </body>
 </html>

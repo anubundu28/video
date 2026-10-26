@@ -54,7 +54,7 @@
     rows: '<path d="M3 6h18M3 12h18M3 18h18"/>',
     message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'
   };
-  const LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d7cff"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#lg)"/><ellipse cx="16" cy="9.5" rx="8" ry="3" fill="none" stroke="#fff" stroke-width="2"/><path d="M8 9.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13" fill="none" stroke="#fff" stroke-width="2"/><path d="M11 18h3l1.5-3 2 6 1.5-3h2" fill="none" stroke="#d1fae5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#1e3a6e"/><ellipse cx="16" cy="9.5" rx="8" ry="3" fill="none" stroke="#fff" stroke-width="2"/><path d="M8 9.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13" fill="none" stroke="#fff" stroke-width="2"/><path d="M8 16c0 1.7 3.6 3 8 3s8-1.3 8-3" fill="none" stroke="#fff" stroke-width="2"/></svg>';
 
   function svg(name) {
     if (name === 'logo') return LOGO;
@@ -112,12 +112,6 @@
   }
   const icon = (name, cls) => el('span', { icon: name, class: cls });
   const hydrate = root => $$('[data-icon]', root).forEach(n => { if (!n.firstChild) n.innerHTML = svg(n.getAttribute('data-icon')); });
-
-  function svgEl(tag, attrs) {
-    const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
-    Object.keys(attrs || {}).forEach(k => e.setAttribute(k, attrs[k]));
-    return e;
-  }
 
   function pill(sev, text) {
     return el('span', { class: 'pill ' + sev }, [icon(SEV_ICON[sev] || 'info'), text || SEV_LABEL[sev] || sev]);
@@ -293,7 +287,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Chrome: banner, toasts, tooltip, theme
+  // Chrome: banner, toasts, tooltip
   // ---------------------------------------------------------------------------
   function banner(kind, text) {
     const b = $('#banner');
@@ -310,15 +304,6 @@
     setTimeout(() => { t.classList.add('leaving'); setTimeout(() => t.remove(), 300); }, 3800);
   }
 
-  function showTip(x, y, text) {
-    const t = $('#tip');
-    t.textContent = text;
-    t.hidden = false;
-    const w = t.offsetWidth;
-    t.style.left = Math.min(window.innerWidth - w - 8, Math.max(8, x - w / 2)) + 'px';
-    t.style.top = (y - 38) + 'px';
-  }
-  const hideTip = () => { $('#tip').hidden = true; };
 
   // ---------------------------------------------------------------------------
   // Server picker
@@ -521,14 +506,13 @@
     const s = asObjects(res.resultSets[0])[0] || {};
     const disks = asObjects(res.resultSets[1]);
     const dbs = asObjects(res.resultSets[2]);
-    const cpu = asObjects(res.resultSets[3]);
     const lat = (state.inst[state.server] || {}).latencyMs;
 
     const grid = el('div', { class: 'ov' });
 
     // Hero
     const chips = [
-      el('span', { class: 'chip accent' }, [icon('layers'), versionName(s.ProductVersion) + ' ' + [s.ProductLevel, s.UpdateLevel].filter(Boolean).join(' ')]),
+      el('span', { class: 'chip' }, [icon('layers'), versionName(s.ProductVersion) + ' ' + [s.ProductLevel, s.UpdateLevel].filter(Boolean).join(' ')]),
       el('span', { class: 'chip' }, [icon('shield'), shortEdition(s.Edition) + ' edition']),
       s.HostPlatform ? el('span', { class: 'chip' }, [icon('server'), s.HostPlatform]) : null,
       el('span', { class: 'chip' }, [icon('clock'), 'Up ' + fmtUptime(s.UptimeMinutes)]),
@@ -538,7 +522,7 @@
     grid.appendChild(el('section', { class: 'card hero span-12 fade-in' }, [
       el('div', { style: null }, [
         el('div', { class: 'hero-kicker' }, [el('span', { class: 'dot online' }), 'Online' + (lat ? ' · ' + fmtMs(lat) : '') + (inst.role ? ' · ' + inst.role : '') + (inst.group ? ' · ' + inst.group : '')]),
-        el('h1', null, el('span', { class: 'grad-text', text: inst.name })),
+        el('h1', { text: inst.name }),
         el('div', { class: 'sub', text: (s.ServerName && s.ServerName !== inst.name ? s.ServerName + ' · ' : '') + inst.server + (s.InstanceName && s.InstanceName !== 'MSSQLSERVER' ? ' · instance ' + s.InstanceName : '') }),
         el('div', { class: 'hero-chips' }, chips)
       ]),
@@ -548,60 +532,30 @@
       ])
     ]));
 
-    // Metric cards
-    const memPct = s.PhysicalMemoryMB ? Math.round(100 * (s.TotalServerMemoryMB || 0) / s.PhysicalMemoryMB) : null;
-    const totalDisk = disks.reduce((a, d) => a + (d.TotalGB || 0), 0);
+    // Key numbers - plain values, no charts
     const freeDisk = disks.reduce((a, d) => a + (d.FreeGB || 0), 0);
-    const usedPct = totalDisk ? Math.round(100 * (totalDisk - freeDisk) / totalDisk) : null;
-    const cpuSev = s.SqlCpuPct >= 90 ? 'critical' : s.SqlCpuPct >= 75 ? 'warning' : null;
-    const diskSev = usedPct >= 90 ? 'critical' : usedPct >= 80 ? 'warning' : null;
-
-    grid.appendChild(metricCard('cpu', 'CPU', cpuSev, [
-      ring([{ v: s.SqlCpuPct || 0, grad: true, sev: cpuSev }, { v: s.OtherCpuPct || 0, muted: true }],
-        s.SqlCpuPct === null || s.SqlCpuPct === undefined ? '–' : s.SqlCpuPct + '%', 'SQL CPU'),
-      facts([
-        ['Logical CPUs', fmtInt(s.LogicalCpus)],
-        ['Other processes', s.OtherCpuPct === null || s.OtherCpuPct === undefined ? '–' : s.OtherCpuPct + '%'],
-        ['Max DOP', s.MaxDop === 0 ? '0 (all)' : fmtInt(s.MaxDop)]
-      ])
-    ], cpu.length > 1 ? sparkline(cpu) : el('div', { class: 'sub', text: 'CPU history appears after a few minutes of uptime.' })));
-
     const capped = s.MaxServerMemoryMB && s.MaxServerMemoryMB < UNCAPPED_MEMORY;
-    grid.appendChild(metricCard('memory', 'Memory', null, [
-      ring([{ v: memPct || 0, grad: true }], fmtSizeMB(s.TotalServerMemoryMB), 'SQL uses'),
-      facts([
-        ['Server RAM', fmtSizeMB(s.PhysicalMemoryMB)],
-        ['Max memory', capped ? fmtSizeMB(s.MaxServerMemoryMB) : 'Not capped'],
-        ['Page life (PLE)', s.PageLifeExpectancy === null || s.PageLifeExpectancy === undefined ? '–' : fmtInt(s.PageLifeExpectancy) + ' s']
-      ])
-    ], capped ? null : el('div', { class: 'sub' }, [pill('warning', 'Max server memory not set'), ' SQL Server may starve the OS.'])));
-
     const offline = (s.DatabaseCount || 0) - (s.OnlineDatabases || 0);
-    const userPct = s.DatabaseCount ? 100 * s.UserDatabases / s.DatabaseCount : 0;
-    grid.appendChild(metricCard('database', 'Databases', offline ? 'warning' : null, [
-      el('div', { class: 'metric-facts' }, [
-        el('div', { class: 'big' }, [fmtInt(s.DatabaseCount), el('small', { text: 'databases' })]),
-        el('div', { class: 'split', title: 'User vs system databases' }, [
-          el('span', { style: null }), el('span', { style: null })
-        ]),
-        facts([
-          ['User / system', fmtInt(s.UserDatabases) + ' / ' + fmtInt((s.DatabaseCount || 0) - (s.UserDatabases || 0))],
-          ['Online', offline ? fmtInt(s.OnlineDatabases) + ' of ' + fmtInt(s.DatabaseCount) : 'All online']
-        ])
-      ])
-    ], el('button', { class: 'btn', type: 'button', onclick: () => go('databases') }, ['View all databases', icon('arrow')])));
-    const split = $$('.split span', grid.lastChild);
-    setWidthLater(split[0], userPct, 'var(--data)');
-    setWidthLater(split[1], 100 - userPct, 'var(--track)');
+    const cpuSev = s.SqlCpuPct >= 90 ? 'critical' : s.SqlCpuPct >= 75 ? 'warning' : null;
+    const lowDisk = disks.some(d => d.FreePct < 20);
+    const has = v => v !== null && v !== undefined;
 
-    grid.appendChild(metricCard('disk', 'Storage', diskSev, [
-      ring([{ v: usedPct || 0, grad: true, sev: diskSev }], usedPct === null ? '–' : usedPct + '%', 'Disk used'),
-      facts([
-        ['Data files', fmtSizeMB(s.DataSizeMB)],
-        ['Log files', fmtSizeMB(s.LogSizeMB)],
-        ['Free disk', disks.length ? fmtSizeGB(freeDisk) : '–']
-      ])
-    ], null));
+    grid.appendChild(statCard('cpu', 'CPU', cpuSev, has(s.SqlCpuPct) ? s.SqlCpuPct + '%' : '–', 'SQL Server CPU usage', [
+      ['Logical CPUs', fmtInt(s.LogicalCpus)],
+      ['MAXDOP', s.MaxDop === 0 ? '0 (unlimited)' : fmtInt(s.MaxDop)]
+    ]));
+    grid.appendChild(statCard('memory', 'Memory', capped ? null : 'warning', fmtSizeMB(s.PhysicalMemoryMB), 'Server RAM', [
+      ['Max server memory', capped ? fmtSizeMB(s.MaxServerMemoryMB) : 'Not set'],
+      ['Used by SQL Server', fmtSizeMB(s.TotalServerMemoryMB)]
+    ]));
+    grid.appendChild(statCard('database', 'Databases', offline ? 'warning' : null, fmtInt(s.DatabaseCount), 'Databases on this server', [
+      ['User / system', fmtInt(s.UserDatabases) + ' / ' + fmtInt((s.DatabaseCount || 0) - (s.UserDatabases || 0))],
+      ['Online', offline ? fmtInt(s.OnlineDatabases) + ' of ' + fmtInt(s.DatabaseCount) : 'All online']
+    ]));
+    grid.appendChild(statCard('disk', 'Storage', lowDisk ? 'warning' : null, fmtSizeMB((s.DataSizeMB || 0) + (s.LogSizeMB || 0)), 'Total size of all databases', [
+      ['Data / log', fmtSizeMB(s.DataSizeMB) + ' / ' + fmtSizeMB(s.LogSizeMB)],
+      ['Free disk space', disks.length ? fmtSizeGB(freeDisk) : '–']
+    ]));
 
     // Attention tiles
     const tiles = el('div', { class: 'tiles span-12' });
@@ -609,7 +563,7 @@
       s.BackupsMissing7d ? 'Missing full backups' : 'Full backups current',
       s.BackupsMissing7d ? 'No full backup in the last 7 days' : 'Every database backed up within 7 days', 'backup-missing'));
     tiles.appendChild(tile(s.RunningBackups ? 'info' : 'none', 'progress', s.RunningBackups,
-      s.RunningBackups ? 'Backups running' : 'No backups running', s.RunningBackups ? 'See live progress & ETA' : 'Recent backups and restores', 'running-backups'));
+      s.RunningBackups ? 'Backups running' : 'No backups running', s.RunningBackups ? 'See progress & ETA' : 'Recent backups and restores', 'running-backups'));
     tiles.appendChild(tile(s.BlockedRequests ? 'warning' : 'none', 'activity', s.ActiveRequests,
       'Active queries', s.BlockedRequests ? plural(s.BlockedRequests, 'blocked request') : fmtInt(s.UserSessions) + ' user sessions', 'queries'));
     tiles.appendChild(tile(s.FailedJobs24h ? 'critical' : 'ok', 'clock', s.FailedJobs24h,
@@ -617,52 +571,31 @@
     grid.appendChild(tiles);
 
     // Disks
-    const diskCard = el('section', { class: 'card card-pad span-7 fade-in' }, [
-      el('div', { class: 'card-head' }, [el('div', { class: 'card-title' }, [icon('disk'), 'Disks']), el('span', { class: 'sub', text: disks.length ? plural(disks.length, 'volume') + ' with database files' : '' })])
+    const diskCard = el('section', { class: 'card span-7 fade-in' }, [
+      el('div', { class: 'card-head pad' }, [el('div', { class: 'card-title' }, [icon('disk'), 'Disks']), el('span', { class: 'sub', text: disks.length ? plural(disks.length, 'drive') + ' with database files' : '' })])
     ]);
-    if (!disks.length) diskCard.appendChild(el('div', { class: 'sub', text: 'Disk information is not available (VIEW SERVER STATE required).' }));
-    disks.forEach((d, i) => {
-      const used = d.TotalGB ? 100 - (d.FreePct || 0) : 0;
+    if (!disks.length) diskCard.appendChild(el('div', { class: 'sub pad', text: 'Disk information is not available (VIEW SERVER STATE required).' }));
+    else diskCard.appendChild(miniTable(['Drive', 'Label', 'Total', 'Used', 'Free', 'Free %'], [false, false, true, true, true, true], disks.map((d, i) => {
       const sev = d.FreePct < 10 ? 'critical' : d.FreePct < 20 ? 'warning' : null;
-      const bar = el('div', { class: 'bar' + (sev ? ' ' + sev : '') }, el('span'));
-      diskCard.appendChild(el('div', { class: 'disk' }, [
-        el('div', { class: 'disk-icon' }, icon('disk')),
-        el('div', null, [
-          el('div', { class: 'disk-name' }, [d.Volume || ('Volume ' + (i + 1)), d.Label ? el('span', { text: d.Label }) : null, el('span', { text: plural(d.DatabaseFiles || 0, 'file') })]),
-          bar,
-          el('div', { class: 'sub', text: fmtSizeGB(d.TotalGB - d.FreeGB) + ' used of ' + fmtSizeGB(d.TotalGB) })
-        ]),
-        el('div', { class: 'disk-free' }, [el('b', { text: fmtSizeGB(d.FreeGB) }), sev ? pill(sev, d.FreePct + '% free') : el('span', { class: 'sub', text: d.FreePct + '% free' })])
-      ]));
-      setWidthLater(bar.firstChild, used);
-    });
+      return [el('b', { text: d.Volume || ('Volume ' + (i + 1)) }), d.Label || '–', fmtSizeGB(d.TotalGB), fmtSizeGB(d.TotalGB - d.FreeGB), fmtSizeGB(d.FreeGB),
+        sev ? pill(sev, d.FreePct + '%') : d.FreePct + '%'];
+    })));
     grid.appendChild(diskCard);
 
     // Largest databases
     const top = dbs.slice(0, 8);
-    const maxMb = top.reduce((a, d) => Math.max(a, (d.DataMB || 0) + (d.LogMB || 0)), 0) || 1;
-    const dbCard = el('section', { class: 'card card-pad span-5 fade-in' }, [
-      el('div', { class: 'card-head' }, [
-        el('div', { class: 'card-title' }, [icon('database'), 'Largest databases']),
-        el('div', { class: 'legend' }, [el('span', null, [el('i', { class: 'lg-data' }), 'Data']), el('span', null, [el('i', { class: 'lg-log' }), 'Log'])])
-      ])
+    const dbCard = el('section', { class: 'card span-5 fade-in' }, [
+      el('div', { class: 'card-head pad' }, [el('div', { class: 'card-title' }, [icon('database'), 'Largest databases']),
+        el('button', { class: 'link', type: 'button', onclick: () => go('databases') }, 'View all ' + dbs.length)])
     ]);
-    $$('.lg-data', dbCard)[0].style.background = 'var(--data)';
-    $$('.lg-log', dbCard)[0].style.background = 'var(--log)';
-    top.forEach(d => {
-      const total = (d.DataMB || 0) + (d.LogMB || 0);
-      const bar = el('div', { class: 'split' }, [el('span'), el('span')]);
-      bar.addEventListener('mousemove', e => showTip(e.clientX, e.clientY, d.DatabaseName + ' · data ' + fmtSizeMB(d.DataMB) + ' · log ' + fmtSizeMB(d.LogMB)));
-      bar.addEventListener('mouseleave', hideTip);
-      dbCard.appendChild(el('div', { class: 'dbbar' }, [
-        el('span', { class: 'dbbar-name', text: d.DatabaseName, title: 'Show ' + d.DatabaseName + ' in Databases', onclick: () => go('databases', d.DatabaseName) }),
-        bar,
-        el('span', { class: 'dbbar-size', text: fmtSizeMB(total) })
-      ]));
-      setWidthLater(bar.children[0], 100 * (d.DataMB || 0) / maxMb, 'var(--data)');
-      setWidthLater(bar.children[1], 100 * (d.LogMB || 0) / maxMb, 'var(--log)');
+    const dbTable = miniTable(['Database', 'Data', 'Log', 'Total'], [false, true, true, true],
+      top.map(d => [el('b', { text: d.DatabaseName }), fmtSizeMB(d.DataMB), fmtSizeMB(d.LogMB), fmtSizeMB((d.DataMB || 0) + (d.LogMB || 0))]));
+    $$('tbody tr', dbTable).forEach((tr, i) => {
+      tr.classList.add('clickable');
+      tr.title = 'Show ' + top[i].DatabaseName + ' in Databases';
+      tr.addEventListener('click', () => go('databases', top[i].DatabaseName));
     });
-    if (dbs.length > top.length) dbCard.appendChild(el('button', { class: 'btn', type: 'button', onclick: () => go('databases') }, ['All ' + dbs.length + ' databases', icon('arrow')]));
+    dbCard.appendChild(dbTable);
     grid.appendChild(dbCard);
 
     // Details
@@ -670,7 +603,7 @@
       ['Product version', s.ProductVersion], ['Level / update', [s.ProductLevel, s.UpdateLevel].filter(Boolean).join(' / ')],
       ['Edition', s.Edition], ['Host OS', s.HostPlatform], ['Machine', s.MachineName], ['Instance', s.InstanceName],
       ['Collation', s.Collation], ['Started', s.StartTime], ['Server time', s.ServerTime],
-      ['Cost threshold', s.CostThreshold], ['Memory grants pending', s.MemoryGrantsPending], ['User sessions', s.UserSessions]
+      ['Cost threshold', s.CostThreshold], ['Page life expectancy', has(s.PageLifeExpectancy) ? fmtInt(s.PageLifeExpectancy) + ' s' : null], ['User sessions', s.UserSessions]
     ];
     grid.appendChild(el('section', { class: 'card card-pad span-12 fade-in' }, [
       el('div', { class: 'card-head' }, [el('div', { class: 'card-title' }, [icon('info'), 'Server details'])]),
@@ -680,86 +613,23 @@
     if (res.messages && res.messages.length) {
       grid.appendChild(el('div', { class: 'messages span-12' }, [icon('message'), el('div', { text: res.messages.join(' ') })]));
     }
-
     main.appendChild(grid);
-    requestAnimationFrame(() => requestAnimationFrame(() => $$('[data-w]', grid).forEach(n => { n.style.width = n.getAttribute('data-w'); })));
-    $$('.arc', grid).forEach(a => requestAnimationFrame(() => requestAnimationFrame(() => a.setAttribute('stroke-dashoffset', a.getAttribute('data-to')))));
   }
 
-  function setWidthLater(node, pct, color) {
-    if (!node) return;
-    node.style.width = '0%';
-    if (color) node.style.background = color;
-    node.setAttribute('data-w', Math.max(0, Math.min(100, pct || 0)).toFixed(1) + '%');
-  }
-
-  function metricCard(iconName, label, sev, body, foot) {
-    return el('section', { class: 'card metric span-3 fade-in' }, [
-      el('div', { class: 'metric-top' }, [el('span', { class: 'metric-label' }, [icon(iconName), label]), sev ? pill(sev) : null]),
-      el('div', { class: 'metric-body' }, body),
-      foot || null
+  function statCard(iconName, label, sev, value, caption, rows) {
+    return el('section', { class: 'card stat-card span-3 fade-in' }, [
+      el('div', { class: 'stat-top' }, [el('span', { class: 'stat-label' }, [icon(iconName), label]), sev ? pill(sev) : null]),
+      el('div', { class: 'stat-value', text: value }),
+      el('div', { class: 'sub', text: caption }),
+      el('dl', { class: 'stat-rows' }, rows.map(r => el('div', null, [el('dt', { text: r[0] }), el('dd', { text: r[1] })])))
     ]);
   }
 
-  function facts(list) {
-    return el('div', { class: 'metric-facts' }, list.map(f => el('div', { class: 'fact' }, [el('span', { text: f[0] }), el('b', { text: f[1], title: f[1] })])));
-  }
-
-  let gradSeq = 0;
-  function ring(segments, value, label) {
-    const r = 46, c = 2 * Math.PI * r;
-    const s = svgEl('svg', { viewBox: '0 0 112 112', 'aria-hidden': 'true' });
-    const id = 'rg' + (++gradSeq);
-    const defs = svgEl('defs');
-    const lg = svgEl('linearGradient', { id: id, x1: '0', y1: '0', x2: '1', y2: '1' });
-    lg.appendChild(svgEl('stop', { offset: '0', 'stop-color': '#6d7cff' }));
-    lg.appendChild(svgEl('stop', { offset: '1', 'stop-color': '#22d3ee' }));
-    defs.appendChild(lg);
-    s.appendChild(defs);
-    s.appendChild(svgEl('circle', { cx: 56, cy: 56, r: r, fill: 'none', stroke: 'var(--track)', 'stroke-width': 10 }));
-    let offset = 0;
-    segments.forEach(seg => {
-      const v = Math.max(0, Math.min(100 - offset, seg.v || 0));
-      if (!v) return;
-      const color = seg.sev === 'critical' ? 'var(--crit)' : seg.sev === 'warning' ? 'var(--warn)' : seg.muted ? 'var(--text-3)' : 'url(#' + id + ')';
-      const arc = svgEl('circle', {
-        class: 'arc', cx: 56, cy: 56, r: r, fill: 'none', stroke: color, 'stroke-width': 10, 'stroke-linecap': 'round',
-        'stroke-dasharray': (c * v / 100) + ' ' + c, 'stroke-dashoffset': c * v / 100, 'data-to': -c * offset / 100,
-        opacity: seg.muted ? '.45' : '1'
-      });
-      s.appendChild(arc);
-      offset += v;
-    });
-    return el('div', { class: 'ring' }, [s, el('div', { class: 'ring-center' }, [el('span', { class: 'ring-value' + (String(value).length > 4 ? ' sm' : ''), text: value }), el('span', { class: 'ring-label', text: label })])]);
-  }
-
-  function sparkline(points) {
-    const w = 300, h = 46, n = points.length;
-    const x = i => (i / (n - 1)) * w;
-    const y = v => h - 3 - (Math.max(0, Math.min(100, v || 0)) / 100) * (h - 6);
-    const line = points.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.SqlCpu).toFixed(1)).join(' ');
-    const s = svgEl('svg', { viewBox: '0 0 ' + w + ' ' + h, preserveAspectRatio: 'none' });
-    const defs = svgEl('defs');
-    const id = 'sp' + (++gradSeq);
-    const lg = svgEl('linearGradient', { id: id, x1: '0', y1: '0', x2: '0', y2: '1' });
-    lg.appendChild(svgEl('stop', { offset: '0', 'stop-color': '#6d7cff', 'stop-opacity': '.45' }));
-    lg.appendChild(svgEl('stop', { offset: '1', 'stop-color': '#6d7cff', 'stop-opacity': '0' }));
-    defs.appendChild(lg);
-    s.appendChild(defs);
-    s.appendChild(svgEl('path', { d: line + ' L' + w + ' ' + h + ' L0 ' + h + ' Z', fill: 'url(#' + id + ')' }));
-    s.appendChild(svgEl('path', { d: line, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke', 'stroke-linejoin': 'round' }));
-    const cursor = svgEl('line', { y1: 0, y2: h, stroke: 'var(--text-3)', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke', opacity: 0 });
-    s.appendChild(cursor);
-    const wrap = el('div', { class: 'spark' }, s);
-    wrap.addEventListener('mousemove', e => {
-      const rect = wrap.getBoundingClientRect();
-      const i = Math.round(((e.clientX - rect.left) / rect.width) * (n - 1));
-      const p = points[Math.max(0, Math.min(n - 1, i))];
-      cursor.setAttribute('x1', x(i)); cursor.setAttribute('x2', x(i)); cursor.setAttribute('opacity', 1);
-      showTip(e.clientX, rect.top + 6, 'SQL ' + p.SqlCpu + '% · other ' + p.OtherCpu + '% · ' + (p.MinutesAgo ? p.MinutesAgo + ' min ago' : 'now'));
-    });
-    wrap.addEventListener('mouseleave', () => { cursor.setAttribute('opacity', 0); hideTip(); });
-    return el('div', null, [wrap, el('div', { class: 'spark-cap' }, [el('span', { text: 'SQL CPU · last ' + (points[0].MinutesAgo || n) + ' min' }), el('span', { text: 'now' })])]);
+  function miniTable(headers, numeric, rows) {
+    return el('div', { class: 'mini-wrap' }, el('table', { class: 'grid mini' }, [
+      el('thead', null, el('tr', null, headers.map((h, i) => el('th', { class: numeric[i] ? 'num' : null, text: h })))),
+      el('tbody', null, rows.map(r => el('tr', null, r.map((c, i) => el('td', { class: numeric[i] ? 'num' : null }, c)))))
+    ]));
   }
 
   function tile(sev, iconName, n, label, sub, pageId) {
@@ -778,7 +648,7 @@
     const g = el('div', { class: 'ov' });
     const sk = (cls, h) => { const n = el('div', { class: 'sk ' + cls }); n.style.height = h + 'px'; return n; };
     g.appendChild(sk('span-12', 170));
-    for (let i = 0; i < 4; i++) g.appendChild(sk('span-3', 210));
+    for (let i = 0; i < 4; i++) g.appendChild(sk('span-3', 190));
     g.appendChild(sk('span-12', 80));
     g.appendChild(sk('span-7', 240));
     g.appendChild(sk('span-5', 240));
@@ -942,7 +812,7 @@
     if (rows.length > MAX_ROWS) wrap.appendChild(el('div', { class: 'tnote', text: 'Showing ' + MAX_ROWS + ' of ' + rows.length + ' rows - filter or download the CSV for everything.' }));
   }
 
-  // Percent columns get an inline bar. Values: [warn, crit, higherIsBad]
+  // Percent columns: [warn, crit, higherIsBad] thresholds colour the value
   const PCT_COLUMNS = { LogUsedPct: [75, 90, true], FreePct: [20, 10, false], PercentComplete: null, WaitPct: null, SignalPct: null };
 
   function cell(v, col, isNum, isStatus, isFirst) {
@@ -956,9 +826,7 @@
       const t = PCT_COLUMNS[col.name];
       let sev = null;
       if (t) sev = t[2] ? (v >= t[1] ? 'critical' : v >= t[0] ? 'warning' : null) : (v < t[1] ? 'critical' : v < t[0] ? 'warning' : null);
-      const bar = el('div', { class: 'bar' + (sev ? ' ' + sev : '') }, el('span'));
-      bar.firstChild.style.width = Math.max(0, Math.min(100, v)) + '%';
-      return el('td', null, el('div', { class: 'cellbar' }, [bar, el('b', { text: v.toFixed(1) + '%' })]));
+      return el('td', { class: 'num' }, sev ? pill(sev, v.toFixed(1) + '%') : v.toFixed(1) + '%');
     }
     if (typeof v === 'number' && isNum) {
       return el('td', { class: 'num', text: Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 2 }) });
@@ -1102,11 +970,6 @@
   // Start-up
   // ---------------------------------------------------------------------------
   function bind() {
-    $('#theme-toggle').addEventListener('click', () => {
-      const t = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-      document.documentElement.setAttribute('data-theme', t);
-      store('theme', t);
-    });
     $('#picker-btn').addEventListener('click', e => { e.stopPropagation(); if ($('#picker-pop').hidden) openPicker(); else closePicker(); });
     $('#picker-filter').addEventListener('input', renderPicker);
     $('#picker-pop').addEventListener('click', e => e.stopPropagation());
