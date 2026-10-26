@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>SQL Server Health Dashboard</title>
+  <!--
+    SQL Server Health Dashboard - HTML, CSS and JavaScript in one file.
+    Start-Dashboard.ps1 collects the data into dashboard-data.js (same folder)
+    and opens this page. No web server is used.
+  -->
+  <style>
+/* =========================================================================
+   SQL Server Health Dashboard - styles
+   Clean white layout, navy blue actions, no gradients.
+   System fonts only (Segoe UI on Windows); no external assets.
+   ========================================================================= */
+
+:root {
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, monospace;
+
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --soft: #f5f7fa;
+  --soft-2: #eef1f6;
+  --line: #e3e7ee;
+  --line-2: #cfd6e2;
+  --text: #111827;
+  --text-2: #4b5567;
+  --text-3: #7b8496;
+
+  --navy: #1e3a6e;
+  --navy-hover: #162c55;
+  --navy-soft: #e8edf6;
+  --navy-text: #1e3a6e;
+
+  --shadow: 0 1px 2px rgba(17, 24, 39, .05), 0 2px 8px rgba(17, 24, 39, .04);
+  --focus: 0 0 0 3px rgba(30, 58, 110, .25);
+
+  /* status - always paired with icon + label */
+  --ok: #16884a;   --ok-soft: #e7f5ed;   --ok-text: #11693a;
+  --info: #2f6fdb; --info-soft: #e8f0fc; --info-text: #1d4fa8;
+  --warn: #c98300; --warn-soft: #fff3d6; --warn-text: #7a5000;
+  --crit: #c93434; --crit-soft: #fdeaea; --crit-text: #a32020;
+  --muted-soft: #eef1f6;
+  --crit-row: #fef6f6;
+  --warn-row: #fffaf0;
+
+  --r: 12px;
+  --r-sm: 8px;
+  --rail: 232px;
+  --top: 64px;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; min-height: 100vh; font: 14px/1.45 var(--font); color: var(--text); background: var(--bg); overflow-x: hidden; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); font-weight: 600; letter-spacing: -.01em; }
+button, input, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+:focus-visible { outline: none; box-shadow: var(--focus); }
+
+.unsupported { display: none; padding: 48px 24px; max-width: 640px; margin: 10vh auto; font-family: Segoe UI, Arial, sans-serif; }
+
+[data-icon] { display: inline-flex; width: 18px; height: 18px; flex: none; }
+[data-icon] svg { width: 100%; height: 100%; }
+
+/* ---------- top bar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 30; height: var(--top);
+  display: grid; grid-template-columns: auto minmax(220px, 300px) minmax(200px, 1fr) auto;
+  align-items: center; gap: 16px; padding: 0 20px;
+  background: var(--panel); border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; width: calc(var(--rail) - 36px); }
+.brand-mark { width: 32px; height: 32px; }
+.brand-text { display: flex; flex-direction: column; min-width: 0; }
+.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 15px; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.env { align-self: flex-start; margin-top: 2px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 1px 7px; border-radius: 99px; background: var(--crit-soft); color: var(--crit-text); }
+.env.nonprod { background: var(--info-soft); color: var(--info-text); }
+
+/* server picker */
+.picker { position: relative; min-width: 0; }
+.picker-btn {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 5px 12px 5px 5px; height: 44px;
+  border-radius: 10px; border: 1px solid var(--line-2); background: var(--panel); cursor: pointer; text-align: left;
+}
+.picker-btn:hover { border-color: var(--navy); }
+.picker-icon { position: relative; width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--navy); color: #fff; flex: none; }
+.picker-icon .dot { position: absolute; right: -3px; bottom: -3px; border: 2px solid #fff; }
+.picker-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.picker-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-3); font-weight: 600; }
+.picker-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker-chev { color: var(--text-3); transition: transform .15s; }
+.picker-btn[aria-expanded="true"] .picker-chev { transform: rotate(180deg); }
+
+.popover {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 100%;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(17, 24, 39, .14); padding: 6px;
+}
+.picker-pop { width: 360px; max-width: calc(100vw - 24px); }
+.pop-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; margin-bottom: 6px; border-radius: 8px; background: var(--soft); color: var(--text-3); }
+.pop-search input { flex: 1; min-width: 0; border: 0; background: transparent; height: 34px; }
+.pop-search input:focus { outline: none; }
+.picker-list { max-height: 60vh; overflow: auto; }
+.pop-group { font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); padding: 8px 10px 4px; }
+.opt { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; border: 0; background: transparent; cursor: pointer; text-align: left; }
+.opt:hover, .opt.is-active { background: var(--navy-soft); }
+.opt[aria-selected="true"] .opt-name { color: var(--navy); }
+.opt-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.opt-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt-sub { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt-side { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+.opt .tag { font-size: 10.5px; padding: 1px 8px; border-radius: 99px; background: var(--soft-2); color: var(--text-2); font-weight: 600; white-space: nowrap; }
+.opt-icon { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; background: var(--soft); color: var(--navy); flex: none; }
+.opt-icon [data-icon] { width: 16px; height: 16px; }
+.opt mark { background: none; color: var(--navy); font-weight: 700; }
+.pop-empty { padding: 14px; text-align: center; color: var(--text-3); font-size: 13px; }
+
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--text-3); flex: none; }
+.dot.online { background: var(--ok); }
+.dot.offline { background: var(--crit); }
+.dot.checking { background: var(--info); animation: blink 1s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: .3; } }
+
+/* search */
+.search { position: relative; display: flex; align-items: center; height: 40px; border-radius: 10px; background: var(--soft); border: 1px solid var(--line); padding: 0 10px 0 12px; gap: 8px; min-width: 0; max-width: 560px; }
+.search:focus-within { border-color: var(--navy); background: var(--panel); box-shadow: var(--focus); }
+.search-icon { color: var(--text-3); }
+.search input { flex: 1; min-width: 0; border: 0; background: transparent; height: 38px; }
+.search input:focus { outline: none; }
+.search-kbd { font: 600 11px var(--mono); color: var(--text-3); border: 1px solid var(--line-2); border-radius: 5px; padding: 1px 6px; background: var(--panel); }
+.search-pop { width: 100%; max-height: 70vh; overflow: auto; }
+
+.actions { display: flex; align-items: center; gap: 8px; justify-self: end; }
+.auto { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text-2); }
+.auto select { border: 0; background: transparent; height: 34px; cursor: pointer; }
+.auto select:focus { outline: none; }
+
+/* ---------- buttons (navy blue) ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 8px;
+  border: 1px solid var(--navy); background: var(--navy); color: #fff; cursor: pointer; font-weight: 600; white-space: nowrap;
+  transition: background-color .15s;
+}
+.btn:hover { background: var(--navy-hover); border-color: var(--navy-hover); }
+.btn:disabled { opacity: .6; cursor: default; }
+.icon-btn {
+  width: 34px; height: 34px; display: inline-grid; place-items: center; border-radius: 8px;
+  border: 1px solid var(--navy); background: var(--navy); color: #fff; cursor: pointer; transition: background-color .15s;
+}
+.icon-btn:hover { background: var(--navy-hover); }
+.icon-btn.sm { width: 30px; height: 30px; border-radius: 7px; }
+.icon-btn.sm [data-icon] { width: 15px; height: 15px; }
+.link { border: 0; background: none; padding: 0; color: var(--navy); font-weight: 600; cursor: pointer; font-size: 13px; }
+.link:hover { text-decoration: underline; }
+.spin { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.banner { margin: 14px 20px 0; padding: 10px 14px; border-radius: 8px; display: flex; gap: 10px; align-items: center; background: var(--warn-soft); color: var(--warn-text); border: 1px solid #f3dca4; }
+.banner.error { background: var(--crit-soft); color: var(--crit-text); border-color: #f2c4c4; }
+
+/* ---------- shell ---------- */
+.shell { display: grid; grid-template-columns: var(--rail) minmax(0, 1fr); min-height: calc(100vh - var(--top)); }
+.rail {
+  position: sticky; top: var(--top); align-self: start; height: calc(100vh - var(--top)); overflow: auto;
+  padding: 16px 12px 24px; border-right: 1px solid var(--line); background: var(--panel);
+}
+.rail-group { font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); padding: 14px 12px 6px; }
+.rail-group:first-child { padding-top: 0; }
+.nav {
+  position: relative; display: flex; align-items: center; gap: 11px; width: 100%; padding: 8px 12px; margin: 1px 0;
+  border-radius: 8px; color: var(--text-2); text-decoration: none; font-weight: 500;
+}
+.nav:hover { background: var(--soft); color: var(--text); }
+.nav.is-active { background: var(--navy-soft); color: var(--navy); font-weight: 600; }
+.nav.is-active::before { content: ""; position: absolute; left: -12px; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--navy); }
+.nav-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge { min-width: 22px; height: 20px; padding: 0 7px; border-radius: 99px; font-size: 11.5px; font-weight: 700; display: inline-grid; place-items: center; background: var(--soft-2); color: var(--text-2); font-variant-numeric: tabular-nums; }
+.badge.crit { background: var(--crit-soft); color: var(--crit-text); }
+.badge.warn { background: var(--warn-soft); color: var(--warn-text); }
+.badge.live { background: var(--info-soft); color: var(--info-text); }
+
+.main { min-width: 0; padding: 22px 26px 48px; max-width: 1560px; width: 100%; }
+.main:focus { outline: none; }
+
+/* ---------- cards ---------- */
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); min-width: 0; }
+.card-pad { padding: 18px 20px; }
+.pad { padding: 16px 20px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.card-head.pad { margin-bottom: 0; }
+.card-title { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; font-family: var(--font-display); }
+.card-title [data-icon] { color: var(--navy); }
+.sub { font-size: 12.5px; color: var(--text-3); }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 7px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--muted-soft); color: var(--text-2); line-height: 18px; }
+.pill [data-icon] { width: 13px; height: 13px; }
+.pill.ok { background: var(--ok-soft); color: var(--ok-text); }
+.pill.info { background: var(--info-soft); color: var(--info-text); }
+.pill.warning { background: var(--warn-soft); color: var(--warn-text); }
+.pill.critical, .pill.error { background: var(--crit-soft); color: var(--crit-text); }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: 99px; background: var(--soft); border: 1px solid var(--line); font-size: 12.5px; font-weight: 500; color: var(--text-2); white-space: nowrap; }
+.chip [data-icon] { width: 14px; height: 14px; color: var(--navy); }
+
+/* ---------- overview ---------- */
+.ov { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+.span-12 { grid-column: span 12; } .span-7 { grid-column: span 7; } .span-5 { grid-column: span 5; } .span-3 { grid-column: span 3; }
+
+.hero { padding: 22px 24px; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; align-items: flex-end; }
+.hero-kicker { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
+.hero h1 { font-size: 32px; line-height: 1.15; margin: 6px 0 2px; color: var(--navy); word-break: break-word; }
+.hero-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.hero-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.hero-meta { display: flex; gap: 14px; align-items: center; font-size: 12.5px; color: var(--text-3); }
+
+.stat-card { padding: 18px 20px; display: flex; flex-direction: column; }
+.stat-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.stat-label { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); }
+.stat-label [data-icon] { width: 16px; height: 16px; color: var(--navy); }
+.stat-value { font-family: var(--font-display); font-size: 34px; font-weight: 700; line-height: 1.1; color: var(--text); font-variant-numeric: tabular-nums; }
+.stat-rows { margin: 14px 0 0; border-top: 1px solid var(--line); }
+.stat-rows div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.stat-rows div:last-child { border-bottom: 0; padding-bottom: 0; }
+.stat-rows dt { color: var(--text-2); }
+.stat-rows dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.tile {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--r);
+  border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); cursor: pointer; text-align: left;
+  transition: border-color .15s;
+}
+.tile:hover { border-color: var(--navy); }
+.tile-icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--soft); color: var(--text-2); }
+.tile-icon [data-icon] { width: 20px; height: 20px; }
+.tile.ok .tile-icon { background: var(--ok-soft); color: var(--ok); }
+.tile.critical .tile-icon { background: var(--crit-soft); color: var(--crit); }
+.tile.warning .tile-icon { background: var(--warn-soft); color: var(--warn); }
+.tile.info .tile-icon { background: var(--info-soft); color: var(--info); }
+.tile.critical { border-color: #f0c2c2; }
+.tile.warning { border-color: #f0d9a2; }
+.tile-num { font-family: var(--font-display); font-size: 24px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.tile-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.tile-label { font-weight: 600; font-size: 13.5px; }
+.tile-sub { font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile-go { color: var(--navy); }
+
+.mini-wrap { overflow-x: auto; border-top: 1px solid var(--line); }
+.grid.mini th { cursor: default; position: static; }
+.grid.mini td, .grid.mini th { padding: 9px 20px; }
+.grid tr.clickable { cursor: pointer; }
+
+.kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 28px; margin: 0; }
+.kv div { display: flex; justify-content: space-between; gap: 14px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; min-width: 0; }
+.kv dt { color: var(--text-3); white-space: nowrap; }
+.kv dd { margin: 0; font-weight: 600; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- table pages ---------- */
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.page-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.page-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--navy); color: #fff; display: grid; place-items: center; flex: none; }
+.page-icon [data-icon] { width: 22px; height: 22px; }
+.page-title h1 { font-size: 24px; color: var(--navy); }
+.page-title p { margin: 3px 0 0; color: var(--text-2); max-width: 720px; }
+.page-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.stamp { font-size: 12.5px; color: var(--text-3); display: inline-flex; align-items: center; gap: 6px; }
+
+.summary-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.stat { display: flex; align-items: center; gap: 10px; padding: 9px 16px 9px 10px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); }
+.stat-n { font-family: var(--font-display); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-l { font-size: 12.5px; color: var(--text-3); }
+.stat .ico { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; }
+.stat .ico [data-icon] { width: 16px; height: 16px; }
+.stat.critical .ico { background: var(--crit-soft); color: var(--crit); }
+.stat.warning .ico { background: var(--warn-soft); color: var(--warn); }
+.stat.ok .ico { background: var(--ok-soft); color: var(--ok); }
+.stat.rows .ico { background: var(--navy-soft); color: var(--navy); }
+
+.filter-chip { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 14px; padding: 5px 6px 5px 14px; border-radius: 99px; background: var(--navy-soft); color: var(--navy); font-size: 13px; font-weight: 500; }
+.filter-chip button { border: 0; background: var(--navy); color: #fff; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; }
+.filter-chip button [data-icon] { width: 12px; height: 12px; }
+
+.panel { margin-bottom: 16px; overflow: hidden; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 18px; }
+.panel-title { display: flex; align-items: center; gap: 10px; font-weight: 600; font-family: var(--font-display); font-size: 15px; }
+.panel-tools { display: flex; align-items: center; gap: 6px; }
+.tfilter { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 7px; background: var(--soft); border: 1px solid var(--line); color: var(--text-3); }
+.tfilter [data-icon] { width: 14px; height: 14px; }
+.tfilter input { border: 0; background: transparent; width: 150px; height: 28px; font-size: 13px; }
+.tfilter input:focus { outline: none; }
+.tfilter:focus-within { border-color: var(--navy); background: var(--panel); }
+.segmented { display: inline-flex; padding: 3px; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); }
+.segmented button { border: 0; background: transparent; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.segmented button.is-active { background: var(--navy); color: #fff; }
+
+.messages { margin: 0 18px 14px; padding: 10px 14px; border-radius: 8px; background: var(--info-soft); color: var(--info-text); font-size: 13px; display: flex; gap: 10px; }
+.messages ul { margin: 0; padding-left: 18px; }
+
+.twrap { overflow: auto; max-height: 620px; border-top: 1px solid var(--line); }
+table.grid { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.grid th {
+  position: sticky; top: 0; z-index: 1; background: var(--soft); text-align: left; white-space: nowrap;
+  padding: 9px 14px; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-2);
+  border-bottom: 1px solid var(--line); cursor: pointer; user-select: none;
+}
+.grid th:hover { color: var(--text); }
+.grid th .s { margin-left: 4px; opacity: .35; font-size: 9px; }
+.grid th.sorted { color: var(--navy); }
+.grid th.sorted .s { opacity: 1; }
+.grid td { padding: 8px 14px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; max-width: 520px; }
+.grid tbody tr:hover td { background: var(--soft); }
+.grid tr:last-child td { border-bottom: 0; }
+.grid tr.row-critical td { background: var(--crit-row); }
+.grid tr.row-warning td { background: var(--warn-row); }
+.grid tr.row-critical td:first-child { box-shadow: inset 3px 0 0 var(--crit); }
+.grid tr.row-warning td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+.grid .num { text-align: right; font-variant-numeric: tabular-nums; }
+.grid td.null { color: var(--text-3); }
+.grid td.strong { font-weight: 600; }
+.grid td.clamp { white-space: normal; min-width: 280px; }
+.grid td.clamp > div { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: zoom-in; word-break: break-word; white-space: pre-wrap; }
+.grid td.clamp.open > div { display: block; -webkit-line-clamp: unset; cursor: zoom-out; }
+.grid td.code > div { font: 12px/1.5 var(--mono); color: var(--text-2); }
+.yes { color: var(--ok-text); font-weight: 600; }
+.no { color: var(--text-3); }
+.tnote { padding: 10px 18px; font-size: 12px; color: var(--text-3); border-top: 1px solid var(--line); }
+
+.empty { padding: 30px 20px 34px; text-align: center; border-top: 1px solid var(--line); }
+.empty-icon { width: 48px; height: 48px; margin: 0 auto 10px; border-radius: 12px; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); }
+.empty-icon [data-icon] { width: 24px; height: 24px; }
+.empty h4 { font-size: 15px; }
+.empty p { margin: 4px 0 0; color: var(--text-3); font-size: 13px; }
+
+.errorcard { padding: 32px; text-align: center; }
+.errorcard .empty-icon { background: var(--crit-soft); color: var(--crit); }
+.errorcard pre { white-space: pre-wrap; word-break: break-word; font: 12.5px/1.5 var(--mono); color: var(--crit-text); background: var(--crit-soft); border-radius: 8px; padding: 12px 14px; text-align: left; max-width: 760px; margin: 14px auto; }
+
+/* loading placeholders */
+.sk { background: var(--soft); border-radius: 10px; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+
+.welcome { padding: 56px 30px; text-align: center; }
+.welcome .page-icon { margin: 0 auto 16px; width: 56px; height: 56px; border-radius: 14px; }
+.welcome h1 { font-size: 26px; color: var(--navy); }
+.welcome p { color: var(--text-2); max-width: 520px; margin: 10px auto 0; }
+
+.toasts { position: fixed; right: 20px; bottom: 20px; z-index: 70; display: flex; flex-direction: column; gap: 10px; max-width: min(380px, calc(100vw - 32px)); }
+.toast { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 10px 28px rgba(17, 24, 39, .14); font-size: 13px; }
+.toast.ok [data-icon] { color: var(--ok); } .toast.error [data-icon] { color: var(--crit); } .toast.info [data-icon] { color: var(--info); }
+.toast.leaving { opacity: 0; transition: opacity .25s; }
+
+.fade-in { animation: fadein .25s ease-out both; }
+@keyframes fadein { from { opacity: 0; } }
+
+/* ---------- responsive ---------- */
+@media (max-width: 1280px) {
+  .span-3 { grid-column: span 6; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  :root { --rail: 72px; }
+  .brand { width: auto; }
+  .brand-text { display: none; }
+  .rail { padding: 14px 10px; }
+  .rail-group { font-size: 0; padding: 8px 0 4px; border-top: 1px solid var(--line); margin-top: 6px; }
+  .rail-group:first-child { border-top: 0; margin-top: 0; }
+  .nav { justify-content: center; padding: 10px 0; }
+  .nav-label { display: none; }
+  .nav .badge { position: absolute; top: 2px; right: 2px; min-width: 18px; height: 16px; font-size: 10px; padding: 0 5px; }
+  .nav.is-active::before { left: -10px; }
+  .span-7, .span-5 { grid-column: span 12; }
+}
+@media (max-width: 760px) {
+  :root { --top: auto; }
+  .topbar { grid-template-columns: auto 1fr auto; grid-template-areas: "brand picker actions" "search search search"; gap: 10px; padding: 10px 14px; height: auto; }
+  .brand { grid-area: brand; } .picker { grid-area: picker; } .actions { grid-area: actions; } .search { grid-area: search; max-width: none; }
+  .auto span[data-icon] { display: none; }
+  .search-kbd { display: none; }
+  .shell { grid-template-columns: minmax(0, 1fr); }
+  .rail {
+    position: sticky; top: 114px; z-index: 20; height: auto; display: flex; gap: 6px; overflow-x: auto; padding: 10px 14px;
+    border-right: 0; border-bottom: 1px solid var(--line); scrollbar-width: none;
+  }
+  .rail::-webkit-scrollbar { display: none; }
+  .rail-group { display: none; }
+  .nav { width: auto; flex: none; padding: 6px 12px; border-radius: 99px; background: var(--soft); }
+  .nav-label { display: inline; }
+  .nav .badge { position: static; }
+  .nav.is-active { background: var(--navy); color: #fff; }
+  .nav.is-active::before { display: none; }
+  .main { padding: 16px 14px 40px; }
+  .span-3 { grid-column: span 12; }
+  .tiles { grid-template-columns: minmax(0, 1fr); }
+  .kv { grid-template-columns: minmax(0, 1fr); }
+  .hero { padding: 18px; }
+  .hero h1 { font-size: 26px; }
+  .hero-side { align-items: flex-start; }
+  .page-title h1 { font-size: 20px; }
+  .tfilter input { width: 100px; }
+  .grid.mini td, .grid.mini th { padding: 8px 14px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+@media print {
+  .topbar, .rail, .page-tools, .panel-tools, .toasts { display: none !important; }
+  .shell { display: block; }
+  .twrap { max-height: none; overflow: visible; }
+}
+  </style>
+  <script>
+/* Runs before the app: shows a clear message on browsers that are too old
+   (e.g. Internet Explorer) instead of a blank page. Written in ES3 on purpose. */
+(function () {
+  var ok = typeof window.fetch === 'function' && typeof window.Promise === 'function' &&
+           window.CSS && CSS.supports && CSS.supports('--a', '0');
+  if (ok) return;
+  window.__unsupportedBrowser = true;
+  function show() {
+    var el = document.getElementById('unsupported');
+    if (el) { el.removeAttribute('hidden'); el.style.display = 'block'; }
+  }
+  if (document.readyState === 'loading') {
+    document.attachEvent ? document.attachEvent('onreadystatechange', function () {
+      if (document.readyState !== 'loading') show();
+    }) : document.addEventListener('DOMContentLoaded', show);
+  } else { show(); }
+})();
+  </script>
+  <script src="dashboard-data.js" charset="utf-8"></script>
+</head>
+<body>
+  <div id="unsupported" class="unsupported" hidden>
+    <h1>Please open this dashboard in Microsoft Edge or Google Chrome</h1>
+    <p>This browser is too old to run the dashboard. Copy the address from the dashboard console window into Edge or Chrome.</p>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" data-icon="logo"></span>
+      <div class="brand-text">
+        <span class="brand-name" id="app-title">SQL Server Health</span>
+        <span class="env" id="env-badge" hidden></span>
+      </div>
+    </div>
+
+    <div class="picker" id="picker">
+      <button class="picker-btn" id="picker-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+        <span class="picker-icon"><span data-icon="server"></span><span class="dot" id="picker-dot"></span></span>
+        <span class="picker-text">
+          <span class="picker-label">Server</span>
+          <span class="picker-name" id="picker-name">Select a server</span>
+        </span>
+        <span data-icon="chevron" class="picker-chev"></span>
+      </button>
+      <div class="popover picker-pop" id="picker-pop" hidden>
+        <div class="pop-search" id="picker-search-wrap">
+          <span data-icon="search"></span>
+          <input type="text" id="picker-filter" placeholder="Find a server" aria-label="Find a server" autocomplete="off">
+        </div>
+        <div class="picker-list" id="picker-list" role="listbox" aria-label="SQL Servers"></div>
+      </div>
+    </div>
+
+    <div class="search" id="search">
+      <span data-icon="search" class="search-icon"></span>
+      <input type="text" id="search-input" placeholder="Search databases, pages or servers" aria-label="Search" autocomplete="off" spellcheck="false">
+      <kbd class="search-kbd">/</kbd>
+      <div class="popover search-pop" id="search-pop" hidden role="listbox" aria-label="Search results"></div>
+    </div>
+
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="shell">
+    <nav class="rail" id="rail" aria-label="Pages"></nav>
+    <main class="main" id="main" tabindex="-1"></main>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <script>
+/* SQL Server Health Dashboard - reads dashboard-data.js written by Start-Dashboard.ps1.
+   Plain JavaScript, no frameworks. Data is always rendered as text, never as HTML. */
+(function () {
+  'use strict';
+  if (window.__unsupportedBrowser) return;
+
+  const SEV = { none: 0, info: 1, ok: 2, warning: 3, critical: 4, error: 5 };
+  const SEV_LABEL = { info: 'Info', ok: 'OK', warning: 'Warning', critical: 'Critical', error: 'Failed' };
+  const SEV_ICON = { info: 'info', ok: 'check-circle', warning: 'alert', critical: 'x-circle', error: 'x-circle' };
+  const NUMERIC = /^(int|bigint|smallint|tinyint|decimal|numeric|float|real|money|smallmoney)$/i;
+  const SQL_VERSIONS = { 17: '2025', 16: '2022', 15: '2019', 14: '2017', 13: '2016', 12: '2014', 11: '2012', 10: '2008' };
+  const UNCAPPED_MEMORY = 2147483647;
+  const STORE = 'sqldash.';
+  const MAX_ROWS = 1000;
+
+  const ICONS = {
+    server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01"/>',
+    database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+    replication: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    archive: '<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M10 13h4"/>',
+    disk: '<path d="M22 12H2"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/>',
+    activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/>',
+    gauge: '<path d="M12 14l4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+    progress: '<path d="M21 12a9 9 0 1 1-9-9"/><path d="M12 7v5l3 3"/>',
+    cluster: '<circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M12 8v3M10.5 13.5l-4 3M13.5 13.5l4 3"/>',
+    hourglass: '<path d="M6 2h12M6 22h12"/><path d="M7 2c0 5 10 6 10 10S7 17 7 22M17 2c0 5-10 6-10 10s10 5 10 10"/>',
+    cpu: '<rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
+    memory: '<rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 11v2M10 11v2M14 11v2M18 11v2M6 17v3M10 17v3M14 17v3M18 17v3"/>',
+    layers: '<path d="M12 2l10 5-10 5L2 7z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>',
+    play: '<path d="M6 4l14 8-14 8z"/>',
+    refresh: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>',
+    moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+    check: '<path d="M20 6L9 17l-5-5"/>',
+    'check-circle': '<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
+    alert: '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
+    'x-circle': '<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>',
+    info: '<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
+    copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>',
+    chevron: '<path d="M6 9l6 6 6-6"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    x: '<path d="M18 6L6 18M6 6l12 12"/>',
+    rows: '<path d="M3 6h18M3 12h18M3 18h18"/>',
+    message: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>'
+  };
+  const LOGO = '<svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#1e3a6e"/><ellipse cx="16" cy="9.5" rx="8" ry="3" fill="none" stroke="#fff" stroke-width="2"/><path d="M8 9.5v13c0 1.7 3.6 3 8 3s8-1.3 8-3v-13" fill="none" stroke="#fff" stroke-width="2"/><path d="M8 16c0 1.7 3.6 3 8 3s8-1.3 8-3" fill="none" stroke="#fff" stroke-width="2"/></svg>';
+
+  function svg(name) {
+    if (name === 'logo') return LOGO;
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      (ICONS[name] || ICONS.database) + '</svg>';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pages (left menu) and the checks they show. Check ids match the
+  // "-- @check <id>" sections in queries.sql.
+  // ---------------------------------------------------------------------------
+  const CHECKS = [
+    { id: 'summary', title: 'Server overview' },
+    { id: 'databases', title: 'All databases', resultTitles: ['Databases'] },
+    { id: 'backup-missing', title: 'Missing full backups', resultTitles: ['No full backup in the last 7 days'],
+      emptyMessages: ['Every online database has a full backup from the last 7 days.'] },
+    { id: 'running-backups', title: 'Running backups', resultTitles: ['In progress', 'Completed in the last 24 h'],
+      emptyMessages: ['No backup or restore was running when the data was collected.', 'No backups finished in the last 24 hours.'] },
+    { id: 'backups', title: 'Backup RPO', resultTitles: ['Backups by database'] },
+    { id: 'queries', title: 'Running queries', resultTitles: ['Active requests', 'Head blockers'],
+      emptyMessages: ['Nothing was running when the data was collected.', 'No blocking.'] },
+    { id: 'replication', title: 'Replication',
+      resultTitles: ['Replication agents', 'Replication errors (last 24 h)', 'Replicated databases on this server', 'Subscriptions on this server'],
+      emptyMessages: ['No replication agents here - agent status is read on the Distributor.', 'No replication errors in the last 24 hours.',
+        'No published or subscribed databases on this server.', 'No subscriptions on this server.'] },
+    { id: 'ag', title: 'Availability groups', resultTitles: ['Availability groups', 'Database replica states'],
+      emptyMessages: ['No availability groups on this server.', 'No availability databases.'] },
+    { id: 'jobs', title: 'Agent jobs', resultTitles: ['SQL Server Agent service', 'Failed / retried steps (last 24 h)', 'All jobs'],
+      emptyMessages: ['SQL Server Agent is not installed (Express edition?).', 'No job failures in the last 24 hours.', 'No jobs defined.'] },
+    { id: 'waits', title: 'Wait statistics', resultTitles: ['Top waits'] },
+    { id: 'errorlog', title: 'Error log', resultTitles: ['Error log entries'], emptyMessages: ['No errors logged in the last 24 hours.'] }
+  ];
+
+  const PAGES = [
+    { id: 'overview', title: 'Overview', icon: 'gauge', view: 'overview', checks: ['summary'], group: 'Server',
+      description: 'Version, CPUs, memory, databases, storage and disks.' },
+    { id: 'databases', title: 'Databases', icon: 'database', checks: ['databases'], group: 'Server', badge: 'UserDatabases',
+      description: 'Every database on this server with state, size, log usage and last full backup.' },
+    { id: 'backup-missing', title: 'Missing backups', icon: 'archive', checks: ['backup-missing'], group: 'Backups', badge: 'BackupsMissing7d',
+      description: 'Databases whose last full backup is older than 7 days (or that were never backed up).' },
+    { id: 'running-backups', title: 'Running backups', icon: 'progress', checks: ['running-backups'], group: 'Backups', badge: 'RunningBackups',
+      description: 'Backups and restores in progress, and the backups completed in the last 24 hours.' },
+    { id: 'backup-rpo', title: 'Backup RPO', icon: 'shield', checks: ['backups'], group: 'Backups',
+      description: 'Full, differential and log backup age for every database against RPO thresholds.' },
+    { id: 'queries', title: 'Running queries', icon: 'activity', checks: ['queries'], group: 'Activity', badge: 'ActiveRequests',
+      description: 'What was executing when the data was collected, longest first, with blocking chains.' },
+    { id: 'replication', title: 'Replication', icon: 'replication', checks: ['replication'], group: 'Activity',
+      description: 'Replication agents, latency, undistributed commands, errors and subscriptions.' },
+    { id: 'ag', title: 'Availability groups', icon: 'cluster', checks: ['ag'], group: 'More',
+      description: 'Always On health, synchronization, queues and estimated lag.' },
+    { id: 'jobs', title: 'Agent jobs', icon: 'clock', checks: ['jobs'], group: 'More', badge: 'FailedJobs24h',
+      description: 'Agent service, failed steps in the last 24 h and the status of every job.' },
+    { id: 'waits', title: 'Wait statistics', icon: 'hourglass', checks: ['waits'], group: 'More',
+      description: 'Where the server spends its time waiting since the last restart.' },
+    { id: 'errorlog', title: 'Error log', icon: 'file', checks: ['errorlog'], group: 'More',
+      description: 'Errors and failures in the current SQL Server error log (last 24 h).' }
+  ];
+
+  // ---------------------------------------------------------------------------
+  // State & data (written by Start-Dashboard.ps1 into dashboard-data.js)
+  // ---------------------------------------------------------------------------
+  const DATA = window.DASHBOARD_DATA || null;
+  const state = {
+    cfg: null,             // { title, environment, instances, checks, pages }
+    server: null,          // selected server id
+    page: 'overview',
+    inst: {},              // server id -> { state, latencyMs, error }
+    tables: {},            // "server|check|set" -> { q, sort, dir }
+    view: 'all',           // 'all' | 'issues'
+    filter: '',            // global search filter applied to page tables
+    pendingFilter: ''
+  };
+  let collectedAt = Date.now();
+
+  function serverData(id) { return DATA ? DATA.servers.find(s => s.id === id) : null; }
+
+  // Returns { res } for one check of one server.
+  function cached(check, server) {
+    const srv = serverData(server || state.server);
+    if (!srv) return null;
+    const res = srv.checks && srv.checks[check];
+    if (res) return { res: res };
+    if (!srv.ok) return { res: analyze({ ok: false, error: srv.error, resultSets: [], messages: [] }) };
+    return null;
+  }
+
+  function parseLocal(s) {
+    const m = /^(\d{4})-(\d\d)-(\d\d) (\d\d):(\d\d):(\d\d)/.exec(s || '');
+    return m ? new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime() : Date.now();
+  }
+
+  // ---------------------------------------------------------------------------
+  // DOM helpers
+  // ---------------------------------------------------------------------------
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s));
+
+  function el(tag, props, kids) {
+    const e = document.createElement(tag);
+    if (props) {
+      Object.keys(props).forEach(k => {
+        const v = props[k];
+        if (v === null || v === undefined || v === false) return;
+        if (k === 'class') e.className = v;
+        else if (k === 'text') e.textContent = v;
+        else if (k === 'icon') { e.setAttribute('data-icon', v); e.innerHTML = svg(v); }
+        else if (k.indexOf('on') === 0) e.addEventListener(k.slice(2), v);
+        else e.setAttribute(k, v === true ? '' : v);
+      });
+    }
+    if (kids !== undefined && kids !== null) {
+      [].concat(kids).forEach(c => {
+        if (c === null || c === undefined || c === false) return;
+        e.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
+      });
+    }
+    return e;
+  }
+  const icon = (name, cls) => el('span', { icon: name, class: cls });
+  const hydrate = root => $$('[data-icon]', root).forEach(n => { if (!n.firstChild) n.innerHTML = svg(n.getAttribute('data-icon')); });
+
+  function pill(sev, text) {
+    return el('span', { class: 'pill ' + sev }, [icon(SEV_ICON[sev] || 'info'), text || SEV_LABEL[sev] || sev]);
+  }
+
+  function store(key, value) {
+    try {
+      if (value === undefined) return localStorage.getItem(STORE + key);
+      localStorage.setItem(STORE + key, value);
+    } catch (e) { /* storage unavailable */ }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Formatting
+  // ---------------------------------------------------------------------------
+  const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+  const fmtInt = n => (n === null || n === undefined) ? '–' : Math.round(n).toLocaleString();
+  function fmtSizeMB(mb) {
+    if (mb === null || mb === undefined || isNaN(mb)) return '–';
+    if (mb >= 1048576) return (mb / 1048576).toFixed(2) + ' TB';
+    if (mb >= 1024) return (mb / 1024).toFixed(mb >= 102400 ? 0 : 1) + ' GB';
+    return Math.round(mb) + ' MB';
+  }
+  const fmtSizeGB = gb => fmtSizeMB(gb * 1024);
+  function fmtUptime(min) {
+    if (min === null || min === undefined) return '–';
+    const d = Math.floor(min / 1440), h = Math.floor(min / 60) % 24, m = min % 60;
+    return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + m + 'm' : m + 'm';
+  }
+  function fmtAgo(date) {
+    const s = Math.max(0, Math.round((Date.now() - date) / 1000));
+    if (s < 10) return 'just now';
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.floor(s / 60) + ' min ago';
+    return Math.floor(s / 3600) + ' h ago';
+  }
+  const fmtMs = ms => ms >= 1000 ? (ms / 1000).toFixed(1) + ' s' : Math.round(ms) + ' ms';
+  function versionName(ver) {
+    const major = parseInt(ver, 10);
+    return SQL_VERSIONS[major] ? 'SQL Server ' + SQL_VERSIONS[major] : 'SQL Server ' + (ver || '');
+  }
+  const shortEdition = e => String(e || '').replace(/ \(64-bit\)/, '').replace(/ Edition/, '');
+  function humanize(name) {
+    return String(name).replace(/_/g, ' ')
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+      .replace(/\bPct\b/g, '%').replace(/\bSec\b/g, '(s)').replace(/\bMin\b/g, '(min)')
+      .replace(/\b(KB|MB|GB)\b/g, '($1)').trim();
+  }
+
+  function analyze(res) {
+    res.counts = { critical: 0, warning: 0, info: 0, ok: 0, rows: 0 };
+    (res.resultSets || []).forEach(set => {
+      set.statusIdx = set.columns.findIndex(c => /^status$/i.test(c.name));
+      set.counts = { critical: 0, warning: 0, info: 0, ok: 0 };
+      res.counts.rows += set.rows.length;
+      if (set.statusIdx < 0) return;
+      set.rows.forEach(r => { const s = normSev(r[set.statusIdx]); if (s) set.counts[s]++; });
+      ['critical', 'warning', 'info', 'ok'].forEach(k => { res.counts[k] += set.counts[k]; });
+    });
+    return res;
+  }
+
+  function normSev(v) {
+    const s = String(v === null || v === undefined ? '' : v).toLowerCase();
+    if (s === 'ok') return 'ok';
+    if (s === 'warning') return 'warning';
+    if (s === 'critical' || s === 'error') return 'critical';
+    if (s === 'info') return 'info';
+    return null;
+  }
+
+  function asObjects(set) {
+    if (!set) return [];
+    return set.rows.map(r => { const o = {}; set.columns.forEach((c, i) => { o[c.name] = r[i]; }); return o; });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Chrome: banner, toasts, stamps
+  // ---------------------------------------------------------------------------
+  function banner(kind, text) {
+    const b = $('#banner');
+    b.className = 'banner' + (kind === 'error' ? ' error' : '');
+    b.textContent = '';
+    b.appendChild(icon(kind === 'error' ? 'x-circle' : 'info'));
+    b.appendChild(el('span', { text: text }));
+    b.hidden = false;
+  }
+
+  function toast(kind, text) {
+    const t = el('div', { class: 'toast ' + kind, role: 'status' }, [icon(kind === 'ok' ? 'check-circle' : kind === 'error' ? 'x-circle' : 'info'), el('div', { text: text })]);
+    $('#toasts').appendChild(t);
+    setTimeout(() => { t.classList.add('leaving'); setTimeout(() => t.remove(), 300); }, 3800);
+  }
+
+
+  function stamp() {
+    return el('span', { class: 'stamp', 'data-at': collectedAt, title: 'Collected ' + DATA.generatedAt + ' by ' + (DATA.generatedBy || '') },
+      [icon('clock'), 'Collected ' + fmtAgo(collectedAt)]);
+  }
+
+  function reloadButton() {
+    return el('button', { class: 'btn', type: 'button', title: 'Load the latest results saved by Start-Dashboard.ps1', onclick: () => location.reload() },
+      [icon('refresh'), 'Reload']);
+  }
+
+  function errorCard(title, msg) {
+    return el('div', { class: 'card errorcard fade-in' }, [
+      el('div', { class: 'empty-icon' }, icon('x-circle')),
+      el('h3', { text: title }),
+      el('pre', { text: msg || 'Unknown error' }),
+      el('p', { class: 'sub', text: 'Check the server name and port, firewall rules and permissions, then run Start-Dashboard.ps1 again.' })
+    ]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Server picker
+  // ---------------------------------------------------------------------------
+  const instById = id => state.cfg.instances.find(i => i.id === id);
+  const checkById = id => state.cfg.checks.find(c => c.id === id);
+  const pageById = id => state.cfg.pages.find(p => p.id === id);
+
+  function instSubtitle(inst) {
+    const st = state.inst[inst.id] || {};
+    if (st.state === 'offline') return 'Unreachable';
+    const sum = cached('summary', inst.id);
+    if (sum && sum.res.ok) {
+      const s = asObjects(sum.res.resultSets[0])[0] || {};
+      return versionName(s.ProductVersion) + ' · ' + shortEdition(s.Edition);
+    }
+    return inst.server;
+  }
+
+  function renderPicker() {
+    const inst = state.server ? instById(state.server) : null;
+    const st = inst ? (state.inst[inst.id] || {}) : {};
+    $('#picker-name').textContent = inst ? inst.name : 'Select a server';
+    $('#picker-dot').className = 'dot ' + (st.state || '');
+    $('#picker-btn').title = inst ? inst.server : '';
+
+    const list = $('#picker-list');
+    if ($('#picker-pop').hidden) return;
+    const q = $('#picker-filter').value.trim().toLowerCase();
+    list.textContent = '';
+    let group = null, shown = 0;
+    state.cfg.instances.forEach(i => {
+      if (q && [i.name, i.server, i.group, i.role].join(' ').toLowerCase().indexOf(q) < 0) return;
+      if (i.group !== group) { if (i.group) list.appendChild(el('div', { class: 'pop-group', text: i.group })); group = i.group; }
+      shown++;
+      const s = state.inst[i.id] || {};
+      list.appendChild(el('button', {
+        class: 'opt', type: 'button', role: 'option', 'aria-selected': i.id === state.server ? 'true' : 'false',
+        onclick: () => { closePicker(); selectServer(i.id); }
+      }, [
+        el('span', { class: 'dot ' + (s.state || '') }),
+        el('span', { class: 'opt-main' }, [el('span', { class: 'opt-name', text: i.name }), el('span', { class: 'opt-sub', text: instSubtitle(i) })]),
+        i.role ? el('span', { class: 'tag', text: i.role }) : null,
+        el('span', { class: 'opt-side', text: s.state === 'online' && s.latencyMs ? fmtMs(s.latencyMs) : '' })
+      ]));
+    });
+    if (!shown) list.appendChild(el('div', { class: 'pop-empty', text: 'No server matches.' }));
+  }
+
+  function openPicker() {
+    $('#picker-pop').hidden = false;
+    $('#picker-btn').setAttribute('aria-expanded', 'true');
+    $('#picker-search-wrap').hidden = state.cfg.instances.length < 7;
+    $('#picker-filter').value = '';
+    renderPicker();
+    if (!$('#picker-search-wrap').hidden) $('#picker-filter').focus();
+  }
+  function closePicker() {
+    $('#picker-pop').hidden = true;
+    $('#picker-btn').setAttribute('aria-expanded', 'false');
+  }
+
+  function selectServer(id) {
+    if (!instById(id)) return;
+    state.pendingFilter = '';
+    location.hash = '#/' + id + '/' + state.page;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Menu and navigation. The address is #/<server>/<page>, so Back and
+  // Reload keep your place.
+  // ---------------------------------------------------------------------------
+  function badgeFor(page) {
+    if (!page.badge || !state.server) return null;
+    const sum = cached('summary');
+    if (!sum || !sum.res.ok) return null;
+    const s = asObjects(sum.res.resultSets[0])[0] || {};
+    const n = s[page.badge];
+    if (n === null || n === undefined) return null;
+    const cls = { BackupsMissing7d: n ? 'crit' : '', FailedJobs24h: n ? 'crit' : '', RunningBackups: n ? 'live' : '', ActiveRequests: s.BlockedRequests ? 'warn' : n ? 'live' : '' }[page.badge] || '';
+    if (!n && page.badge !== 'UserDatabases') return null;
+    return el('span', { class: 'badge ' + cls, text: fmtInt(n) });
+  }
+
+  function renderRail() {
+    const rail = $('#rail');
+    rail.textContent = '';
+    let group = null;
+    state.cfg.pages.forEach(p => {
+      if (p.group && p.group !== group) { rail.appendChild(el('div', { class: 'rail-group', text: p.group })); group = p.group; }
+      rail.appendChild(el('a', {
+        class: 'nav' + (p.id === state.page ? ' is-active' : ''), href: '#/' + state.server + '/' + p.id, title: p.title,
+        'aria-current': p.id === state.page ? 'page' : null
+      }, [icon(p.icon), el('span', { class: 'nav-label', text: p.title }), badgeFor(p)]));
+    });
+  }
+
+  function go(pageId, filter) {
+    state.pendingFilter = filter || '';
+    const hash = '#/' + state.server + '/' + pageId;
+    if (hash === location.hash) route();
+    else location.hash = hash;
+  }
+
+  function route() {
+    const m = location.hash.match(/^#\/([\w-]+)(?:\/([\w-]+))?/) || [];
+    if (m[1] && instById(m[1])) state.server = m[1];
+    if (!state.server || !instById(state.server)) state.server = (instById(store('server')) || state.cfg.instances[0] || {}).id || null;
+    if (state.server) store('server', state.server);
+    state.page = pageById(m[2]) ? m[2] : state.cfg.pages[0].id;
+    state.filter = state.pendingFilter || '';   // a filter only survives navigation started by search
+    state.pendingFilter = '';
+    renderPicker();
+    renderRail();
+    renderPage();
+    window.scrollTo(0, 0);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pages
+  // ---------------------------------------------------------------------------
+  function renderPage() {
+    const main = $('#main');
+    const page = pageById(state.page);
+    main.textContent = '';
+    if (!state.server || !page) return;
+    if (page.view === 'overview') renderOverview(main, page);
+    else renderTablePage(main, page);
+  }
+
+  // ----- Overview --------------------------------------------------------------
+  function renderOverview(main, page) {
+    const entry = cached('summary');
+    const inst = instById(state.server);
+    if (!entry) { main.appendChild(errorCard('No overview data for ' + inst.name, 'The "summary" check is missing from queries.sql.')); return; }
+    const res = entry.res;
+    if (!res.ok) { main.appendChild(errorCard('Could not reach ' + inst.name, res.error)); return; }
+    const lat = (state.inst[state.server] || {}).latencyMs;
+
+    const s = asObjects(res.resultSets[0])[0] || {};
+    const disks = asObjects(res.resultSets[1]);
+    const dbs = asObjects(res.resultSets[2]);
+
+    const grid = el('div', { class: 'ov' });
+
+    // Hero
+    const chips = [
+      el('span', { class: 'chip' }, [icon('layers'), versionName(s.ProductVersion) + ' ' + [s.ProductLevel, s.UpdateLevel].filter(Boolean).join(' ')]),
+      el('span', { class: 'chip' }, [icon('shield'), shortEdition(s.Edition) + ' edition']),
+      s.HostPlatform ? el('span', { class: 'chip' }, [icon('server'), s.HostPlatform]) : null,
+      el('span', { class: 'chip' }, [icon('clock'), 'Up ' + fmtUptime(s.UptimeMinutes)]),
+      s.IsHadrEnabled ? el('span', { class: 'chip' }, [icon('cluster'), 'Always On']) : null,
+      s.IsClustered ? el('span', { class: 'chip' }, [icon('cluster'), 'Failover cluster']) : null
+    ];
+    grid.appendChild(el('section', { class: 'card hero span-12 fade-in' }, [
+      el('div', { style: null }, [
+        el('div', { class: 'hero-kicker' }, [el('span', { class: 'dot online' }), 'Online' + (lat ? ' · ' + fmtMs(lat) : '') + (inst.role ? ' · ' + inst.role : '') + (inst.group ? ' · ' + inst.group : '')]),
+        el('h1', { text: inst.name }),
+        el('div', { class: 'sub', text: (s.ServerName && s.ServerName !== inst.name ? s.ServerName + ' · ' : '') + inst.server + (s.InstanceName && s.InstanceName !== 'MSSQLSERVER' ? ' · instance ' + s.InstanceName : '') }),
+        el('div', { class: 'hero-chips' }, chips)
+      ]),
+      el('div', { class: 'hero-side' }, [
+        reloadButton(),
+        el('div', { class: 'hero-meta' }, [stamp()])
+      ])
+    ]));
+
+    // Key numbers - plain values, no charts
+    const freeDisk = disks.reduce((a, d) => a + (d.FreeGB || 0), 0);
+    const capped = s.MaxServerMemoryMB && s.MaxServerMemoryMB < UNCAPPED_MEMORY;
+    const offline = (s.DatabaseCount || 0) - (s.OnlineDatabases || 0);
+    const lowDisk = disks.some(d => d.FreePct < 20);
+    const has = v => v !== null && v !== undefined;
+
+    grid.appendChild(statCard('cpu', 'CPU', null, fmtInt(s.LogicalCpus), 'Logical CPUs', [
+      ['MAXDOP', s.MaxDop === 0 ? '0 (unlimited)' : fmtInt(s.MaxDop)]
+    ]));
+    grid.appendChild(statCard('memory', 'Memory', capped ? null : 'warning', fmtSizeMB(s.PhysicalMemoryMB), 'Server RAM', [
+      ['Max server memory', capped ? fmtSizeMB(s.MaxServerMemoryMB) : 'Not set'],
+      ['Used by SQL Server', fmtSizeMB(s.TotalServerMemoryMB)]
+    ]));
+    grid.appendChild(statCard('database', 'Databases', offline ? 'warning' : null, fmtInt(s.DatabaseCount), 'Databases on this server', [
+      ['User / system', fmtInt(s.UserDatabases) + ' / ' + fmtInt((s.DatabaseCount || 0) - (s.UserDatabases || 0))],
+      ['Online', offline ? fmtInt(s.OnlineDatabases) + ' of ' + fmtInt(s.DatabaseCount) : 'All online']
+    ]));
+    grid.appendChild(statCard('disk', 'Storage', lowDisk ? 'warning' : null, fmtSizeMB((s.DataSizeMB || 0) + (s.LogSizeMB || 0)), 'Total size of all databases', [
+      ['Data / log', fmtSizeMB(s.DataSizeMB) + ' / ' + fmtSizeMB(s.LogSizeMB)],
+      ['Free disk space', disks.length ? fmtSizeGB(freeDisk) : '–']
+    ]));
+
+    // Attention tiles
+    const tiles = el('div', { class: 'tiles span-12' });
+    tiles.appendChild(tile(s.BackupsMissing7d ? 'critical' : 'ok', 'archive', s.BackupsMissing7d,
+      s.BackupsMissing7d ? 'Missing full backups' : 'Full backups current',
+      s.BackupsMissing7d ? 'No full backup in the last 7 days' : 'Every database backed up within 7 days', 'backup-missing'));
+    tiles.appendChild(tile(s.RunningBackups ? 'info' : 'none', 'progress', s.RunningBackups,
+      s.RunningBackups ? 'Backups running' : 'No backups running', s.RunningBackups ? 'See progress & ETA' : 'Recent backups and restores', 'running-backups'));
+    tiles.appendChild(tile(s.BlockedRequests ? 'warning' : 'none', 'activity', s.ActiveRequests,
+      'Active queries', s.BlockedRequests ? plural(s.BlockedRequests, 'blocked request') : fmtInt(s.UserSessions) + ' user sessions', 'queries'));
+    tiles.appendChild(tile(s.FailedJobs24h ? 'critical' : 'ok', 'clock', s.FailedJobs24h,
+      s.FailedJobs24h ? 'Failed Agent jobs' : 'No failed jobs', 'In the last 24 hours', 'jobs'));
+    grid.appendChild(tiles);
+
+    // Disks
+    const diskCard = el('section', { class: 'card span-7 fade-in' }, [
+      el('div', { class: 'card-head pad' }, [el('div', { class: 'card-title' }, [icon('disk'), 'Disks']), el('span', { class: 'sub', text: disks.length ? plural(disks.length, 'drive') + ' with database files' : '' })])
+    ]);
+    if (!disks.length) diskCard.appendChild(el('div', { class: 'sub pad', text: 'Disk information is not available (VIEW SERVER STATE required).' }));
+    else diskCard.appendChild(miniTable(['Drive', 'Label', 'Total', 'Used', 'Free', 'Free %'], [false, false, true, true, true, true], disks.map((d, i) => {
+      const sev = d.FreePct < 10 ? 'critical' : d.FreePct < 20 ? 'warning' : null;
+      return [el('b', { text: d.Volume || ('Volume ' + (i + 1)) }), d.Label || '–', fmtSizeGB(d.TotalGB), fmtSizeGB(d.TotalGB - d.FreeGB), fmtSizeGB(d.FreeGB),
+        sev ? pill(sev, d.FreePct + '%') : d.FreePct + '%'];
+    })));
+    grid.appendChild(diskCard);
+
+    // Largest databases
+    const top = dbs.slice(0, 8);
+    const dbCard = el('section', { class: 'card span-5 fade-in' }, [
+      el('div', { class: 'card-head pad' }, [el('div', { class: 'card-title' }, [icon('database'), 'Largest databases']),
+        el('button', { class: 'link', type: 'button', onclick: () => go('databases') }, 'View all ' + dbs.length)])
+    ]);
+    const dbTable = miniTable(['Database', 'Data', 'Log', 'Total'], [false, true, true, true],
+      top.map(d => [el('b', { text: d.DatabaseName }), fmtSizeMB(d.DataMB), fmtSizeMB(d.LogMB), fmtSizeMB((d.DataMB || 0) + (d.LogMB || 0))]));
+    $$('tbody tr', dbTable).forEach((tr, i) => {
+      tr.classList.add('clickable');
+      tr.title = 'Show ' + top[i].DatabaseName + ' in Databases';
+      tr.addEventListener('click', () => go('databases', top[i].DatabaseName));
+    });
+    dbCard.appendChild(dbTable);
+    grid.appendChild(dbCard);
+
+    // Details
+    const kv = [
+      ['Product version', s.ProductVersion], ['Level / update', [s.ProductLevel, s.UpdateLevel].filter(Boolean).join(' / ')],
+      ['Edition', s.Edition], ['Host OS', s.HostPlatform], ['Machine', s.MachineName], ['Instance', s.InstanceName],
+      ['Collation', s.Collation], ['Started', s.StartTime], ['Server time', s.ServerTime],
+      ['Cost threshold', s.CostThreshold], ['Page life expectancy', has(s.PageLifeExpectancy) ? fmtInt(s.PageLifeExpectancy) + ' s' : null], ['User sessions', s.UserSessions]
+    ];
+    grid.appendChild(el('section', { class: 'card card-pad span-12 fade-in' }, [
+      el('div', { class: 'card-head' }, [el('div', { class: 'card-title' }, [icon('info'), 'Server details'])]),
+      el('dl', { class: 'kv' }, kv.map(p => el('div', null, [el('dt', { text: p[0] }), el('dd', { text: p[1] === null || p[1] === undefined || p[1] === '' ? '–' : String(p[1]), title: p[1] === null || p[1] === undefined ? null : String(p[1]) })])))
+    ]));
+
+    if (res.messages && res.messages.length) {
+      grid.appendChild(el('div', { class: 'messages span-12' }, [icon('message'), el('div', { text: res.messages.join(' ') })]));
+    }
+    main.appendChild(grid);
+  }
+
+  function statCard(iconName, label, sev, value, caption, rows) {
+    return el('section', { class: 'card stat-card span-3 fade-in' }, [
+      el('div', { class: 'stat-top' }, [el('span', { class: 'stat-label' }, [icon(iconName), label]), sev ? pill(sev) : null]),
+      el('div', { class: 'stat-value', text: value }),
+      el('div', { class: 'sub', text: caption }),
+      el('dl', { class: 'stat-rows' }, rows.map(r => el('div', null, [el('dt', { text: r[0] }), el('dd', { text: r[1] })])))
+    ]);
+  }
+
+  function miniTable(headers, numeric, rows) {
+    return el('div', { class: 'mini-wrap' }, el('table', { class: 'grid mini' }, [
+      el('thead', null, el('tr', null, headers.map((h, i) => el('th', { class: numeric[i] ? 'num' : null, text: h })))),
+      el('tbody', null, rows.map(r => el('tr', null, r.map((c, i) => el('td', { class: numeric[i] ? 'num' : null }, c)))))
+    ]));
+  }
+
+  function tile(sev, iconName, n, label, sub, pageId) {
+    return el('button', { class: 'tile ' + sev + ' fade-in', type: 'button', onclick: () => go(pageId) }, [
+      el('span', { class: 'tile-icon' }, icon(sev === 'ok' ? 'check-circle' : iconName)),
+      el('span', { class: 'tile-text' }, [
+        el('span', { class: 'tile-num', text: n === null || n === undefined ? '–' : fmtInt(n) }),
+        el('span', { class: 'tile-label', text: label }),
+        el('span', { class: 'tile-sub', text: sub })
+      ]),
+      icon('arrow', 'tile-go')
+    ]);
+  }
+
+  // ----- Table pages -------------------------------------------------------------
+  function renderTablePage(main, page) {
+    main.appendChild(el('div', { class: 'page-head fade-in' }, [
+      el('div', { class: 'page-title' }, [
+        el('div', { class: 'page-icon' }, icon(page.icon)),
+        el('div', null, [el('h1', { text: page.title }), el('p', { text: page.description })])
+      ]),
+      el('div', { class: 'page-tools' }, [stamp(), segmented(), reloadButton()])
+    ]));
+
+    if (state.filter) {
+      main.appendChild(el('div', { class: 'filter-chip' }, ['Filtered by “' + state.filter + '”',
+        el('button', { type: 'button', 'aria-label': 'Clear filter', onclick: () => { state.filter = ''; $('#search-input').value = ''; renderPage(); } }, icon('x'))]));
+    }
+
+    const srv = serverData(state.server);
+    if (!srv.ok) { main.appendChild(errorCard('Could not reach ' + instById(state.server).name, srv.error)); return; }
+    const entries = page.checks.map(id => cached(id)).filter(Boolean);
+
+    let crit = 0, warn = 0, ok = 0, rows = 0, hasStatus = false;
+    entries.forEach(e => { if (!e.res.ok) return; crit += e.res.counts.critical; warn += e.res.counts.warning; ok += e.res.counts.ok; rows += e.res.counts.rows; hasStatus = hasStatus || e.res.resultSets.some(s => s.statusIdx >= 0); });
+    const stats = el('div', { class: 'summary-row fade-in' });
+    if (hasStatus) {
+      stats.appendChild(stat('critical', 'x-circle', crit, 'Critical'));
+      stats.appendChild(stat('warning', 'alert', warn, 'Warnings'));
+      stats.appendChild(stat('ok', 'check-circle', ok, 'Healthy'));
+    }
+    stats.appendChild(stat('rows', 'rows', rows, plural(rows, 'row').replace(/^\d+ /, '')));
+    main.appendChild(stats);
+
+    page.checks.forEach(id => {
+      const e = cached(id);
+      const check = checkById(id);
+      if (!e) { main.appendChild(errorCard(check.title + ' was not collected', 'Make sure queries.sql has a "-- @check ' + id + '" section, then run Start-Dashboard.ps1 again.')); return; }
+      if (!e.res.ok) { main.appendChild(errorCard(check.title + ' could not run', e.res.error)); return; }
+      if (e.res.messages && e.res.messages.length) {
+        main.appendChild(el('div', { class: 'messages fade-in' }, [icon('message'), e.res.messages.length === 1 ? el('div', { text: e.res.messages[0] }) : el('ul', null, e.res.messages.map(m => el('li', { text: m })))]));
+        main.lastChild.style.margin = '0 0 16px';
+      }
+      e.res.resultSets.forEach((set, i) => main.appendChild(panel(check, set, i)));
+    });
+  }
+
+  function stat(cls, iconName, n, label) {
+    return el('div', { class: 'stat ' + cls }, [el('span', { class: 'ico' }, icon(iconName)), el('span', { class: 'stat-n', text: fmtInt(n) }), el('span', { class: 'stat-l', text: label })]);
+  }
+
+  function segmented() {
+    const mk = (v, t) => el('button', { type: 'button', class: state.view === v ? 'is-active' : '', 'aria-pressed': state.view === v ? 'true' : 'false',
+      onclick: () => { state.view = v; renderPage(); } }, t);
+    return el('div', { class: 'segmented', role: 'group', 'aria-label': 'Rows to show' }, [mk('all', 'All rows'), mk('issues', 'Issues only')]);
+  }
+
+  function panel(check, set, idx) {
+    const key = state.server + '|' + check.id + '|' + idx;
+    const ui = state.tables[key] || (state.tables[key] = { q: '', sort: -1, dir: 1 });
+    const title = (check.resultTitles && check.resultTitles[idx]) || ('Result ' + (idx + 1));
+    const wrap = el('div', { class: 'twrap' });
+
+    const head = el('div', { class: 'panel-head' }, [
+      el('div', { class: 'panel-title' }, [title,
+        el('span', { class: 'badge', text: fmtInt(set.rows.length) }),
+        set.counts.critical ? pill('critical', set.counts.critical + ' critical') : null,
+        set.counts.warning ? pill('warning', set.counts.warning + ' warning') : null])
+    ]);
+    if (set.rows.length) {
+      const input = el('input', { type: 'search', placeholder: 'Filter', 'aria-label': 'Filter ' + title, value: ui.q });
+      input.addEventListener('input', () => { ui.q = input.value; drawTable(wrap, set, ui); });
+      head.appendChild(el('div', { class: 'panel-tools' }, [
+        el('label', { class: 'tfilter' }, [icon('search'), input]),
+        el('button', { class: 'icon-btn sm', type: 'button', title: 'Copy (paste into Excel or e-mail)', 'aria-label': 'Copy ' + title, onclick: () => copySet(set) }, icon('copy')),
+        el('button', { class: 'icon-btn sm', type: 'button', title: 'Download CSV', 'aria-label': 'Download ' + title, onclick: () => downloadCsv(set, check, title) }, icon('download'))
+      ]));
+    }
+
+    const card = el('section', { class: 'card panel fade-in' }, [head]);
+    if (!set.rows.length) {
+      const msg = (check.emptyMessages && check.emptyMessages[idx]) || 'Nothing to report here.';
+      card.appendChild(el('div', { class: 'empty' }, [el('div', { class: 'empty-icon' }, icon('check-circle')), el('h4', { text: 'All clear' }), el('p', { text: msg })]));
+    } else {
+      card.appendChild(wrap);
+      drawTable(wrap, set, ui);
+    }
+    if (set.truncated) card.appendChild(el('div', { class: 'tnote', text: 'Only the first ' + set.rows.length + ' rows were returned ($MaxRowsPerResult in Start-Dashboard.ps1).' }));
+    return card;
+  }
+
+  function drawTable(wrap, set, ui) {
+    const cols = set.columns;
+    let rows = set.rows;
+    let hidden = 0;
+    if (state.view === 'issues' && set.statusIdx >= 0) {
+      const n = rows.length;
+      rows = rows.filter(r => { const s = normSev(r[set.statusIdx]); return s === 'warning' || s === 'critical'; });
+      hidden = n - rows.length;
+    }
+    const terms = [state.filter, ui.q].map(t => (t || '').trim().toLowerCase()).filter(Boolean);
+    terms.forEach(q => { rows = rows.filter(r => r.some(v => v !== null && String(v).toLowerCase().indexOf(q) >= 0)); });
+    if (ui.sort >= 0) {
+      const i = ui.sort, dir = ui.dir, isStatus = i === set.statusIdx;
+      rows = rows.slice().sort((a, b) => {
+        let x = a[i], y = b[i];
+        if (x === null || x === undefined) return 1;
+        if (y === null || y === undefined) return -1;
+        if (isStatus) { x = SEV[normSev(x)] || 0; y = SEV[normSev(y)] || 0; }
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir;
+        return String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+      });
+    }
+
+    wrap.textContent = '';
+    if (!rows.length) {
+      wrap.appendChild(el('div', { class: 'empty' }, [el('div', { class: 'empty-icon' }, icon(hidden ? 'check-circle' : 'search')),
+        el('h4', { text: hidden ? 'No issues' : 'No matches' }),
+        el('p', { text: hidden ? plural(hidden, 'healthy row') + ' hidden.' : 'No rows match the filter.' })]));
+      return;
+    }
+
+    const numeric = cols.map(c => NUMERIC.test(c.type));
+    const thead = el('tr', null, cols.map((c, i) => {
+      const sorted = ui.sort === i;
+      return el('th', {
+        class: (numeric[i] ? 'num' : '') + (sorted ? ' sorted' : ''), scope: 'col', title: 'Sort by ' + c.name,
+        'aria-sort': sorted ? (ui.dir > 0 ? 'ascending' : 'descending') : 'none',
+        onclick: () => { if (ui.sort === i) ui.dir = -ui.dir; else { ui.sort = i; ui.dir = i === set.statusIdx || numeric[i] ? -1 : 1; } drawTable(wrap, set, ui); }
+      }, [i === set.statusIdx ? 'Status' : humanize(c.name), el('span', { class: 's', text: sorted ? (ui.dir > 0 ? '▲' : '▼') : '↕' })]);
+    }));
+    const firstText = cols.findIndex((c, i) => i !== set.statusIdx && !numeric[i]);
+    const tbody = el('tbody');
+    rows.slice(0, MAX_ROWS).forEach(r => {
+      const sev = set.statusIdx >= 0 ? normSev(r[set.statusIdx]) : null;
+      tbody.appendChild(el('tr', { class: sev === 'critical' || sev === 'warning' ? 'row-' + sev : null },
+        r.map((v, i) => cell(v, cols[i], numeric[i], i === set.statusIdx, i === firstText))));
+    });
+    wrap.appendChild(el('table', { class: 'grid' }, [el('thead', null, thead), tbody]));
+    if (rows.length > MAX_ROWS) wrap.appendChild(el('div', { class: 'tnote', text: 'Showing ' + MAX_ROWS + ' of ' + rows.length + ' rows - filter or download the CSV for everything.' }));
+  }
+
+  // Percent columns: [warn, crit, higherIsBad] thresholds colour the value
+  const PCT_COLUMNS = { LogUsedPct: [75, 90, true], FreePct: [20, 10, false], PercentComplete: null, WaitPct: null, SignalPct: null };
+
+  function cell(v, col, isNum, isStatus, isFirst) {
+    if (isStatus) {
+      const s = normSev(v);
+      return el('td', null, s ? pill(s) : String(v === null ? '' : v));
+    }
+    if (v === null || v === undefined) return el('td', { class: 'null', text: '—' });
+    if (typeof v === 'boolean') return el('td', null, el('span', { class: v ? 'yes' : 'no', text: v ? 'Yes' : 'No' }));
+    if (typeof v === 'number' && Object.prototype.hasOwnProperty.call(PCT_COLUMNS, col.name)) {
+      const t = PCT_COLUMNS[col.name];
+      let sev = null;
+      if (t) sev = t[2] ? (v >= t[1] ? 'critical' : v >= t[0] ? 'warning' : null) : (v < t[1] ? 'critical' : v < t[0] ? 'warning' : null);
+      return el('td', { class: 'num' }, sev ? pill(sev, v.toFixed(1) + '%') : v.toFixed(1) + '%');
+    }
+    if (typeof v === 'number' && isNum) {
+      return el('td', { class: 'num', text: Number.isInteger(v) ? v.toLocaleString() : v.toLocaleString(undefined, { maximumFractionDigits: 2 }) });
+    }
+    const s = String(v);
+    const isCode = /sql|statement/i.test(col.name);
+    if (s.length > 90 || s.indexOf('\n') >= 0 || isCode) {
+      const td = el('td', { class: 'clamp' + (isCode ? ' code' : ''), title: s.length > 600 ? null : s }, el('div', { text: s }));
+      td.addEventListener('click', () => td.classList.toggle('open'));
+      return td;
+    }
+    return el('td', { class: isFirst ? 'strong' : null, text: s });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export
+  // ---------------------------------------------------------------------------
+  const cellText = v => v === null || v === undefined ? '' : String(v);
+
+  function downloadCsv(set, check, title) {
+    const esc = v => { const s = cellText(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    const lines = [set.columns.map(c => esc(c.name)).join(',')].concat(set.rows.map(r => r.map(esc).join(',')));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const name = [instById(state.server).name, check.id, title, stamp].join('_').replace(/[^A-Za-z0-9._-]+/g, '-') + '.csv';
+    const a = el('a', { href: URL.createObjectURL(blob), download: name });
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast('ok', 'Downloaded ' + name);
+  }
+
+  function copySet(set) {
+    const tsv = [set.columns.map(c => c.name).join('\t')]
+      .concat(set.rows.map(r => r.map(v => cellText(v).replace(/[\t\r\n]+/g, ' ')).join('\t'))).join('\r\n');
+    const done = () => toast('ok', 'Copied ' + plural(set.rows.length, 'row') + ' to the clipboard.');
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(tsv).then(done, () => fallbackCopy(tsv, done));
+    else fallbackCopy(tsv, done);
+  }
+
+  function fallbackCopy(text, done) {
+    const ta = el('textarea', { 'aria-hidden': 'true' });
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); done(); } catch (e) { toast('error', 'Copy failed.'); }
+    ta.remove();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Global search: databases, pages, servers
+  // ---------------------------------------------------------------------------
+  let searchItems = [];
+  let searchIdx = -1;
+
+  function highlight(text, q) {
+    const i = text.toLowerCase().indexOf(q);
+    if (!q || i < 0) return [text];
+    return [text.slice(0, i), el('mark', { text: text.slice(i, i + q.length) }), text.slice(i + q.length)];
+  }
+
+  function renderSearch() {
+    const input = $('#search-input');
+    const pop = $('#search-pop');
+    const q = input.value.trim().toLowerCase();
+    searchItems = [];
+    pop.textContent = '';
+    if (!q) { pop.hidden = true; return; }
+
+    const groups = [];
+    const sum = state.server ? cached('summary') : null;
+    if (sum && sum.res.ok) {
+      const dbs = asObjects(sum.res.resultSets[2]).filter(d => d.DatabaseName.toLowerCase().indexOf(q) >= 0).slice(0, 6);
+      if (dbs.length) groups.push(['Databases on ' + instById(state.server).name, dbs.map(d => ({
+        icon: 'database', name: d.DatabaseName, sub: fmtSizeMB((d.DataMB || 0) + (d.LogMB || 0)) + ' · ' + d.State + ' · ' + d.RecoveryModel,
+        run: () => go('databases', d.DatabaseName)
+      }))]);
+    }
+    const pages = state.cfg.pages.filter(p => (p.title + ' ' + p.description).toLowerCase().indexOf(q) >= 0).slice(0, 5);
+    if (pages.length) groups.push(['Pages', pages.map(p => ({ icon: p.icon, name: p.title, sub: p.description, run: () => go(p.id) }))]);
+    const servers = state.cfg.instances.filter(i => [i.name, i.server, i.role, i.group].join(' ').toLowerCase().indexOf(q) >= 0).slice(0, 5);
+    if (servers.length) groups.push(['Servers', servers.map(i => ({ icon: 'server', name: i.name, sub: instSubtitle(i), run: () => selectServer(i.id) }))]);
+    if (state.server && pageById(state.page).view !== 'overview') {
+      groups.push(['Filter', [{ icon: 'search', name: 'Filter “' + input.value.trim() + '” on this page', sub: 'Show only rows containing this text', run: () => { state.filter = input.value.trim(); renderPage(); } }]]);
+    }
+
+    groups.forEach(g => {
+      pop.appendChild(el('div', { class: 'pop-group', text: g[0] }));
+      g[1].forEach(item => {
+        const idx = searchItems.length;
+        searchItems.push(item);
+        pop.appendChild(el('button', {
+          class: 'opt' + (idx === searchIdx ? ' is-active' : ''), type: 'button', role: 'option',
+          onmousedown: e => { e.preventDefault(); chooseSearch(idx); }
+        }, [el('span', { class: 'opt-icon' }, icon(item.icon)),
+          el('span', { class: 'opt-main' }, [el('span', { class: 'opt-name' }, highlight(item.name, q)), el('span', { class: 'opt-sub', text: item.sub })])]));
+      });
+    });
+    if (!searchItems.length) pop.appendChild(el('div', { class: 'pop-empty', text: 'Nothing matches “' + input.value.trim() + '”.' }));
+    pop.hidden = false;
+  }
+
+  function chooseSearch(idx) {
+    const item = searchItems[idx];
+    if (!item) return;
+    const input = $('#search-input');
+    $('#search-pop').hidden = true;
+    input.value = '';
+    input.blur();
+    item.run();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Start-up
+  // ---------------------------------------------------------------------------
+  function tick() {
+    $$('.stamp[data-at]').forEach(n => {
+      const t = n.lastChild;
+      if (t && t.nodeType === 3) t.textContent = 'Collected ' + fmtAgo(Number(n.getAttribute('data-at')));
+    });
+  }
+
+  function bind() {
+    $('#picker-btn').addEventListener('click', e => { e.stopPropagation(); if ($('#picker-pop').hidden) openPicker(); else closePicker(); });
+    $('#picker-filter').addEventListener('input', renderPicker);
+    $('#picker-pop').addEventListener('click', e => e.stopPropagation());
+    document.addEventListener('click', () => closePicker());
+
+    const input = $('#search-input');
+    input.addEventListener('input', () => { searchIdx = 0; renderSearch(); });
+    input.addEventListener('focus', () => { if (input.value) renderSearch(); });
+    input.addEventListener('blur', () => setTimeout(() => { $('#search-pop').hidden = true; }, 120));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!searchItems.length) return;
+        searchIdx = (searchIdx + (e.key === 'ArrowDown' ? 1 : -1) + searchItems.length) % searchItems.length;
+        renderSearch();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        chooseSearch(Math.max(0, searchIdx));
+      } else if (e.key === 'Escape') {
+        input.value = ''; renderSearch(); input.blur();
+      }
+    });
+    document.addEventListener('keydown', e => {
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      if ((e.key === '/' || (e.key === 'k' && (e.ctrlKey || e.metaKey))) && !/INPUT|TEXTAREA|SELECT/.test(tag)) { e.preventDefault(); input.focus(); }
+      if (e.key === 'Escape') closePicker();
+    });
+    window.addEventListener('hashchange', route);
+  }
+
+  function init() {
+    hydrate(document);
+    if (!DATA || !DATA.servers || !DATA.servers.length) {
+      banner('error', 'No data yet. Run Start-Dashboard.ps1 - it checks your SQL Servers, saves the results next to this page and opens it.');
+      $('#main').appendChild(el('div', { class: 'card welcome' }, [
+        el('div', { class: 'page-icon' }, icon('server')),
+        el('h1', { text: 'Run Start-Dashboard.ps1 first' }),
+        el('p', { text: 'In Windows PowerShell, in this folder:  powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\Start-Dashboard.ps1' })
+      ]));
+      return;
+    }
+    collectedAt = parseLocal(DATA.generatedAt);
+    DATA.servers.forEach(s => {
+      s.checks = s.checks || {};
+      Object.keys(s.checks).forEach(k => analyze(s.checks[k]));
+      state.inst[s.id] = { state: s.ok ? 'online' : 'offline', latencyMs: s.latencyMs, error: s.error };
+    });
+    state.cfg = {
+      title: DATA.title || 'SQL Server Health',
+      environment: DATA.environment || '',
+      instances: DATA.servers.map(s => ({ id: s.id, name: s.name, server: s.server, group: s.group || '', role: s.role || '' })),
+      checks: CHECKS,
+      pages: PAGES
+    };
+
+    $('#app-title').textContent = state.cfg.title;
+    document.title = state.cfg.title;
+    if (state.cfg.environment) {
+      const b = $('#env-badge');
+      b.textContent = state.cfg.environment;
+      b.classList.toggle('nonprod', !/prod/i.test(state.cfg.environment));
+      b.hidden = false;
+    }
+    if (DATA.refreshMinutes > 0) {
+      // Start-Dashboard.ps1 keeps collecting; pick up its new results automatically.
+      setTimeout(() => location.reload(), DATA.refreshMinutes * 60000 + 20000);
+    }
+
+    bind();
+    route();
+    setInterval(tick, 15000);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+  </script>
+</body>
+</html>

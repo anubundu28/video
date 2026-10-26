@@ -1,2 +1,3 @@
-logs/
+dashboard-data.js
+*.tmp
 *.test.ps1
