@@ -536,12 +536,10 @@
     const freeDisk = disks.reduce((a, d) => a + (d.FreeGB || 0), 0);
     const capped = s.MaxServerMemoryMB && s.MaxServerMemoryMB < UNCAPPED_MEMORY;
     const offline = (s.DatabaseCount || 0) - (s.OnlineDatabases || 0);
-    const cpuSev = s.SqlCpuPct >= 90 ? 'critical' : s.SqlCpuPct >= 75 ? 'warning' : null;
     const lowDisk = disks.some(d => d.FreePct < 20);
     const has = v => v !== null && v !== undefined;
 
-    grid.appendChild(statCard('cpu', 'CPU', cpuSev, has(s.SqlCpuPct) ? s.SqlCpuPct + '%' : '–', 'SQL Server CPU usage', [
-      ['Logical CPUs', fmtInt(s.LogicalCpus)],
+    grid.appendChild(statCard('cpu', 'CPU', null, fmtInt(s.LogicalCpus), 'Logical CPUs', [
       ['MAXDOP', s.MaxDop === 0 ? '0 (unlimited)' : fmtInt(s.MaxDop)]
     ]));
     grid.appendChild(statCard('memory', 'Memory', capped ? null : 'warning', fmtSizeMB(s.PhysicalMemoryMB), 'Server RAM', [
