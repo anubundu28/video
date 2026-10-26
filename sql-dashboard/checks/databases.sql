@@ -33,6 +33,7 @@ SELECT Status = CASE
        DataMB         = CAST(f.DataMB AS decimal(18, 1)),
        LogMB          = CAST(f.LogMB AS decimal(18, 1)),
        LogUsedPct     = CAST(l.LogUsedPct AS decimal(5, 1)),
+       LastFullBackup = bk.LastFull,
        LogReuseWait   = d.log_reuse_wait_desc,
        Compatibility  = d.compatibility_level,
        PageVerify     = d.page_verify_option_desc,
@@ -41,10 +42,13 @@ SELECT Status = CASE
                    CASE WHEN d.is_auto_close_on = 1 THEN '; auto-close ON' ELSE '' END +
                    CASE WHEN d.page_verify_option_desc <> 'CHECKSUM' THEN '; page verify not CHECKSUM' ELSE '' END +
                    CASE WHEN d.is_read_only = 1 THEN '; read-only' ELSE '' END, 1, 2, ''),
+       Owner          = SUSER_SNAME(d.owner_sid),
        Created        = d.create_date
 FROM sys.databases d
 OUTER APPLY (SELECT DataMB = SUM(CASE WHEN mf.type <> 1 THEN mf.size END) * 8 / 1024.0,
                     LogMB  = SUM(CASE WHEN mf.type = 1 THEN mf.size END) * 8 / 1024.0
              FROM sys.master_files mf WHERE mf.database_id = d.database_id) f
+OUTER APPLY (SELECT LastFull = MAX(bs.backup_finish_date) FROM msdb.dbo.backupset bs
+             WHERE bs.database_name = d.name AND bs.type = 'D' AND bs.backup_finish_date >= DATEADD(SECOND, -2, d.create_date)) bk
 LEFT JOIN #log l ON l.DatabaseName = d.name
 ORDER BY CASE WHEN d.state_desc <> 'ONLINE' THEN 0 ELSE 1 END, l.LogUsedPct DESC, d.name;

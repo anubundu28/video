@@ -197,8 +197,8 @@ foreach ($c in @($config.checks)) {
         Description    = [string](Get-Opt $c 'description' '')
         Category       = [string](Get-Opt $c 'category' 'General')
         Icon           = [string](Get-Opt $c 'icon' 'database')
-        Featured       = [bool](Get-Opt $c 'featured' $false)
         ResultTitles   = @(Get-Opt $c 'resultTitles' @())
+        EmptyMessages  = @(Get-Opt $c 'emptyMessages' @())
         Path           = $path
         CommandTimeout = [int](Get-Opt $c 'commandTimeoutSeconds' $defaultCommandTimeout)
     }
@@ -216,7 +216,30 @@ foreach ($id in $checkOrder) {
     $x = $checks[$id]
     $titles = New-Object System.Collections.Generic.List[string]
     foreach ($t in $x.ResultTitles) { $titles.Add([string]$t) }
-    $publicChecks.Add(@{ id = $x.Id; title = $x.Title; description = $x.Description; category = $x.Category; icon = $x.Icon; featured = $x.Featured; resultTitles = $titles })
+    $empty = New-Object System.Collections.Generic.List[string]
+    foreach ($t in $x.EmptyMessages) { $empty.Add([string]$t) }
+    $publicChecks.Add(@{ id = $x.Id; title = $x.Title; description = $x.Description; category = $x.Category; icon = $x.Icon; resultTitles = $titles; emptyMessages = $empty })
+}
+
+# Pages = the menu. Each page shows one or more checks for the selected server.
+$publicPages = New-Object System.Collections.Generic.List[object]
+foreach ($pg in @(Get-Opt $config 'pages' @())) {
+    $ids = New-Object System.Collections.Generic.List[string]
+    foreach ($cid in @(Get-Opt $pg 'checks' @())) {
+        if ($checks.ContainsKey([string]$cid)) { $ids.Add([string]$cid) }
+        else { Write-Log "Page '$([string](Get-Opt $pg 'id'))' refers to unknown check '$cid'" 'Yellow' }
+    }
+    if ($ids.Count -eq 0) { continue }
+    $publicPages.Add(@{
+        id          = [string](Get-Opt $pg 'id')
+        title       = [string](Get-Opt $pg 'title' (Get-Opt $pg 'id'))
+        description = [string](Get-Opt $pg 'description' '')
+        icon        = [string](Get-Opt $pg 'icon' 'database')
+        group       = [string](Get-Opt $pg 'group' '')
+        view        = [string](Get-Opt $pg 'view' 'tables')
+        badge       = [string](Get-Opt $pg 'badge' '')
+        checks      = $ids
+    })
 }
 $publicConfig = @{
     title       = [string](Get-Opt $config 'title' 'SQL Server Health Dashboard')
@@ -224,7 +247,9 @@ $publicConfig = @{
     version     = $Version
     instances   = $publicInstances
     checks      = $publicChecks
+    pages       = $publicPages
     ui          = @{
+        cacheSeconds        = [int](Get-Opt (Get-Opt $config 'ui') 'cacheSeconds' 120)
         concurrency         = [int](Get-Opt (Get-Opt $config 'ui') 'concurrency' 6)
         pingOnLoad          = [bool](Get-Opt (Get-Opt $config 'ui') 'pingOnLoad' $true)
         defaultAutoRefresh  = [int](Get-Opt (Get-Opt $config 'ui') 'defaultAutoRefreshMinutes' 0)

@@ -4,7 +4,7 @@
   // Apply the saved (or system) colour theme before first paint.
   try {
     var t = window.localStorage && localStorage.getItem('sqldash.theme');
-    if (!t) t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (t !== 'light' && t !== 'dark') t = 'dark';   // dark 'control room' look by default
     document.documentElement.setAttribute('data-theme', t);
   } catch (e) { /* storage unavailable */ }
 

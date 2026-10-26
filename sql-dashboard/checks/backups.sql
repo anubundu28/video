@@ -19,7 +19,7 @@ DECLARE @logCritMinutes   int = 240;
            LastDiff = MAX(CASE WHEN bs.type = 'I' THEN bs.backup_finish_date END),
            LastLog  = MAX(CASE WHEN bs.type = 'L' THEN bs.backup_finish_date END)
     FROM sys.databases d
-    LEFT JOIN msdb.dbo.backupset bs ON bs.database_name = d.name AND bs.backup_finish_date >= d.create_date
+    LEFT JOIN msdb.dbo.backupset bs ON bs.database_name = d.name AND bs.backup_finish_date >= DATEADD(SECOND, -2, d.create_date)
     WHERE d.database_id <> 2 AND d.source_database_id IS NULL AND d.state = 0
     GROUP BY d.name, d.recovery_model_desc, d.state_desc, d.create_date
 )

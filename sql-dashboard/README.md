@@ -24,14 +24,33 @@ sql-dashboard/
 ## Quick start
 
 1. Copy the whole `sql-dashboard` folder to the jump server (for example `C:\Tools\sql-dashboard`).
-2. Edit `config.json` and list your instances (see below).
+2. Edit `config.json` and list your SQL Servers (see below).
 3. Double-click **`Start-Dashboard.cmd`**.
    A console window starts the local service and Edge/Chrome opens the dashboard.
-4. Pick instances on the left and click **Check Replication Status**, or **Run full health check**.
+4. Pick a server from the **Server** dropdown at the top. The overview loads straight away, and the menu on the left
+   opens the detail pages.
 
 Keep the console window open while you use the dashboard; close it (or press `Ctrl+C`) to stop.
 
 > **Preview without SQL Server:** open `web/index.html` directly from disk. It runs in **demo mode** with sample data.
+
+## Using the dashboard
+
+* **Server dropdown** (top left): every configured server with a live status dot, version and response time. The
+  dashboard remembers the last server you picked.
+* **Search** (press `/` or `Ctrl+K`): finds databases on the current server, menu pages and other servers. Pick a
+  database to open the Databases page filtered to it. On a detail page you can also filter its tables by the text.
+* **Overview**: version, edition, host OS and uptime; CPU (with the last hour as a sparkline), memory against RAM and
+  max server memory, database count, data/log size, free disk space, per-volume disks, the largest databases, and four
+  "attention" tiles (missing backups, running backups, active/blocked queries, failed jobs) that open the matching page.
+* **Menu pages**: Databases · Missing backups (no full backup in 7 days) · Running backups (live % complete and ETA,
+  plus everything finished in 24 h) · Backup RPO · Running queries (with head blockers) · Replication · Availability
+  groups · Agent jobs · Wait statistics · Error log. Badges on the menu show live counts.
+* Every table sorts by clicking a header, filters, switches to **Issues only**, copies to the clipboard (pastes into
+  Excel) and downloads as CSV.
+* Results are cached in the browser for `ui.cacheSeconds` (default 120 s), so switching pages is instant. **Refresh**
+  re-runs the queries now; the **Manual / 1 / 5 / 15 min** selector refreshes the current page automatically.
+* Dark "control room" theme by default; the sun/moon button switches to light.
 
 ## Configuring instances
 
@@ -49,7 +68,7 @@ Keep the console window open while you use the dashboard; close it (or press `Ct
 | `id` | Unique key (letters, digits, dashes). |
 | `name` | Display name. |
 | `server` | Anything SSMS accepts: `host`, `host\instance`, `host,port`, an AG listener. Escape `\` as `\\` in JSON. |
-| `group`, `role`, `description` | Optional labels for the sidebar. |
+| `group`, `role`, `description` | Optional labels shown in the server dropdown. |
 | `auth` | `windows` (default): uses the Windows account running the dashboard, exactly like SSMS with Windows Authentication. `sql`: SQL login. |
 | `username`, `credentialKey` | SQL logins only. You are asked for the password **once at start-up**; instances sharing a `credentialKey` share one prompt. Passwords are kept in memory as `SecureString` and never written to disk. |
 | `database` | Initial database (default `master`). |
@@ -61,42 +80,53 @@ Other settings:
 |---|---|---|
 | `server` | `port` (tries the next 9 ports if busy), `openBrowser`, `browserAppMode` (opens Edge/Chrome as a clean app window), `maxConcurrentRequests`, `logToFile` | `8765`, `true`, `true`, `12`, `true` |
 | `connection` | `connectTimeoutSeconds`, `commandTimeoutSeconds`, `maxRowsPerResultSet`, `encrypt`, `trustServerCertificate`, `applicationName` | `8`, `60`, `5000`, `false`, `true` |
-| `ui` | `concurrency` (parallel queries from the browser), `pingOnLoad`, `defaultAutoRefreshMinutes` | `6`, `true`, `0` |
+| `ui` | `concurrency` (parallel status pings), `pingOnLoad`, `cacheSeconds` (how long page data is reused), `defaultAutoRefreshMinutes` | `6`, `true`, `120`, `0` |
 
-## Built-in checks
+## Checks and pages
 
-| Check | What it reports |
-|---|---|
-| **Replication Status** | On a **Distributor**: every Log Reader, Distribution and Merge agent with its state, latency, undistributed commands, last message, plus replication errors from the last 24 h. On any instance: published/subscribed databases (flags `log_reuse_wait = REPLICATION`) and subscriber-side subscriptions with last sync time. Run it on the Distributor for agent status. |
-| Instance Overview | Version, uptime, CPU, memory, page life expectancy, sessions, blocking. |
-| Availability Groups | AG health, replica roles, sync state, send/redo queues, estimated lag. |
-| SQL Agent Jobs | Agent service state, failed/retried steps in 24 h, status of every job, long-running jobs. |
-| Backup Status | Last full/diff/log backup per database against RPO thresholds. |
-| Database Health | State, size, log used %, log reuse wait, risky settings (auto-shrink, page verify). |
-| Disk Space | Free space on every volume holding data or log files. |
-| Blocking & Long Queries | Head blockers, blocked requests, requests running > 5 min. |
-| Top Wait Stats | Top 15 waits since restart (benign waits filtered) with hints. |
-| Error Log | Errors/failures in the current error log in the last 24 h. |
+Each **check** is one `.sql` file in `checks/`. Each **page** in the left menu shows one or more checks for the selected
+server.
 
-Every row gets a **Status** of `OK`, `INFO`, `WARNING` or `CRITICAL`. The dashboard rolls these up per instance and
-check, colours the rows, and counts them in the summary tiles. Thresholds are variables at the top of each `.sql` file.
-Change them there.
+| Page | Check file | What it shows |
+|---|---|---|
+| Overview | `server-summary.sql` | Server identity, CPU (current + last 60 min), memory, databases, data/log size, disks, largest databases, alert counts. |
+| Databases | `databases.sql` | Every database: state, recovery model, data/log size, log used %, last full backup, log reuse wait, risky settings. |
+| Missing backups | `backup-missing.sql` | Databases with no full backup in the last 7 days, or none at all. |
+| Running backups | `running-backups.sql` | BACKUP/RESTORE in progress with % complete, elapsed, remaining and estimated finish; backups completed in the last 24 h with size, compression and destination. |
+| Backup RPO | `backups.sql` | Full/diff/log backup age per database against RPO thresholds. |
+| Running queries | `running-queries.sql` | Every active request (elapsed, CPU, reads, waits, blocker, statement) and head blockers. |
+| Replication | `replication.sql` | On a **Distributor**: Log Reader, Distribution and Merge agents with state, latency, undistributed commands and last message, plus replication errors (24 h). On any server: published/subscribed databases (flags `log_reuse_wait = REPLICATION`) and subscriber-side subscriptions. |
+| Availability groups | `availability-groups.sql` | AG health, replica roles, sync state, send/redo queues, estimated lag. |
+| Agent jobs | `agent-jobs.sql` | Agent service state, failed/retried steps (24 h), every job's last outcome and long runs. |
+| Wait statistics | `wait-stats.sql` | Top 15 waits since restart (benign waits filtered) with hints. |
+| Error log | `error-log.sql` | Errors/failures in the current error log (24 h). |
 
-### Adding your own check
+Rows carry a **Status** of `OK`, `INFO`, `WARNING` or `CRITICAL`. The dashboard colours rows, counts them per page,
+and offers an "Issues only" view. Thresholds (for example 7 days for missing backups, 5 min for long queries) are
+variables at the top of each `.sql` file. Change them there.
+
+### Adding your own page
 
 1. Put a read-only query in `checks/my-check.sql`. Several result sets and `GO` separators are fine; `PRINT` output is
-   shown as a message.
-2. Optionally return a column named `Status` with values `OK` / `INFO` / `WARNING` / `CRITICAL` to get colour-coding.
-3. Add an entry to `checks` in `config.json`:
+   shown as a message. Optionally return a `Status` column (`OK` / `INFO` / `WARNING` / `CRITICAL`) for colour-coding.
+2. Register it under `checks` in `config.json`:
 
 ```json
-{ "id": "my-check", "title": "My Check", "description": "What it does.", "category": "Custom",
-  "icon": "database", "file": "checks/my-check.sql", "resultTitles": ["First result set"] }
+{ "id": "my-check", "title": "My check", "description": "What it does.", "file": "checks/my-check.sql",
+  "resultTitles": ["First result set"], "emptyMessages": ["Shown when the result set is empty."] }
 ```
 
-Icons: `replication, server, shield, clock, archive, database, disk, lock, activity, file`. Set `"featured": true` on one
-check to put it on the big button (Replication Status by default). SQL files are re-read on every run, so edits take
-effect immediately. Changes to `config.json` need a restart.
+3. Add it to the menu under `pages`:
+
+```json
+{ "id": "my-page", "title": "My page", "icon": "database", "group": "More", "checks": ["my-check"],
+  "description": "Shown under the page title." }
+```
+
+Icons: `gauge, database, archive, progress, shield, activity, replication, cluster, clock, hourglass, file, server, disk`.
+An optional `"badge"` shows a count from the overview on the menu item (`UserDatabases`, `BackupsMissing7d`,
+`RunningBackups`, `ActiveRequests`, `FailedJobs24h`). SQL files are re-read on every run, so edits take effect
+immediately. Changes to `config.json` need a restart.
 
 ## Permissions
 
